@@ -1,4 +1,4 @@
-# Foundations setup runbook (M0) — Andy
+# M0: Foundations — setup runbook (Andy)
 
 One-time steps that need your credentials. **This repo is public:** nothing in these steps puts a secret, email address, or credential into a file that gets committed. Values that must stay private go in Secret Manager, GitHub Actions **secrets**, or gitignored local files.
 

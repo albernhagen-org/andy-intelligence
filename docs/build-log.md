@@ -2,7 +2,7 @@
 
 Temporary progress log until andy-intelligence can track its own work (then migrated to tickets).
 
-## 2026-10-21 — Foundations: repo, sign-in, GCP infra (M0) started
+## 2026-10-21 — M0: Foundations: repo, sign-in, GCP infra started
 
 **Decided (Andy):** GitHub org `albernhagen-org` (superseded: personal public repo `albernhagen/andy-intelligence`, ADR-0003); GCP project `andy-intelligence-512400`; Neon free tier; `us-central1`; default run.app URL; standard TS stack. See ADR-0003, 0007, 0008, 0009.
 
@@ -25,38 +25,41 @@ Temporary progress log until andy-intelligence can track its own work (then migr
 
 **Decided (Andy, 2026-10-21 late):** Firestore replaces Neon/Postgres (ADR-0017, supersedes 0008 and 0013). Event-driven flow: per-run Cloud Tasks watchdog instead of a polling reconciler; weekly scout is the only scheduled job. Cloud SQL priced at ≈$9.50/mo and rejected.
 
-## 2026-10-22 — Foundations PR (#1) opened; Docs sync (M1.0)
+## 2026-10-22 — PR #1: Foundations opened; M1.0: Docs sync
 
-- Foundations PR (#1) opened: `m0/foundations` → `main`. Runbook steps 0–4 still pending.
-- Docs sync (M1.0) folded into the Foundations PR (#1) to avoid a stacked PR; its separate PR (#2) closed: ARCHITECTURE revision `2026-10-22a`; ADRs 0018–0023; `AGENTS.md` (+ `CLAUDE.md` symlink); PR template with docs checklist; build prompt moved to slices.
-- **Decided (Andy):** ADR-0012 rejected — every port gets a fake + contract suite, written in the slice that first uses the port (ADR-0023). Docs ship with the change (ADR-0022). M1 sliced (ADR-0021).
+- PR #1: Foundations opened: `m0/foundations` → `main`. Runbook steps 0–4 still pending.
+- M1.0: Docs sync folded into PR #1: Foundations to avoid a stacked PR; PR #2: Docs sync closed: ARCHITECTURE revision `2026-10-22a`; ADRs 0018–0023; `AGENTS.md` (+ `CLAUDE.md` symlink); PR template with docs checklist; build prompt moved to slices.
+- **Decided (Andy):** ADR-0012 rejected — every port gets a fake + contract suite, written in the slice that first uses the port (ADR-0023). Docs ship with the change (ADR-0022). M1: First end-to-end flow split into slices (ADR-0021).
 - **Decided (Andy):** no stacked PRs — slices branch from latest `main` (ADR-0021). Terraform pinned to 1.16.7 via `.terraform-version`, managed with tenv (ADR-0024). Docs written short and plain (ADR-0022).
 
-## Slices: first end-to-end flow, ticket → PR with Claude (M1)
+## Slices: M1: First end-to-end flow: ticket → PR with Claude
 
 Status: todo / in progress / PR open / merged. Definitions: ARCHITECTURE §12.
 
-| Slice                                    | Size            | Depends on                                                                     | Status                      |
-| ---------------------------------------- | --------------- | ------------------------------------------------------------------------------ | --------------------------- |
-| Docs sync (M1.0)                         | S               | Foundations (M0)                                                               | PR open (Foundations PR #1) |
-| MCP OAuth spike (M1.1)                   | M               | Foundations (M0)                                                               | todo                        |
-| Ticket core (M1.2)                       | M               | Foundations (M0)                                                               | todo                        |
-| UI: tickets + inbox (M1.3)               | M               | Ticket core (M1.2)                                                             | todo                        |
-| MCP core tools (M1.4)                    | S               | MCP OAuth spike (M1.1), Ticket core (M1.2)                                     | todo                        |
-| GitHub App + project registration (M1.5) | M               | Ticket core (M1.2)                                                             | todo                        |
-| Claude Code executor (M1.6)              | L (split 6a/6b) | GitHub App + project registration (M1.5)                                       | todo                        |
-| Refinement (M1.7)                        | M               | UI: tickets + inbox (M1.3), MCP core tools (M1.4), Claude Code executor (M1.6) | todo                        |
-| Build + gate (M1.8)                      | M               | Refinement (M1.7)                                                              | todo                        |
-| Quota capture (M1.9)                     | S               | Claude Code executor (M1.6)                                                    | todo                        |
+| Slice                                   | Size            | Depends on                                                                  | Status                       |
+| --------------------------------------- | --------------- | --------------------------------------------------------------------------- | ---------------------------- |
+| M1.0: Docs sync                         | S               | M0: Foundations                                                             | PR open (PR #1: Foundations) |
+| M1.1: MCP OAuth spike                   | M               | M0: Foundations                                                             | todo                         |
+| M1.2: Ticket core                       | M               | M0: Foundations                                                             | todo                         |
+| M1.3: UI: tickets + inbox               | M               | M1.2: Ticket core                                                           | todo                         |
+| M1.4: MCP core tools                    | S               | M1.1: MCP OAuth spike, M1.2: Ticket core                                    | todo                         |
+| M1.5: GitHub App + project registration | M               | M1.2: Ticket core                                                           | todo                         |
+| M1.6: Claude Code executor              | L (split 6a/6b) | M1.5: GitHub App + project registration                                     | todo                         |
+| M1.7: Refinement                        | M               | M1.3: UI: tickets + inbox, M1.4: MCP core tools, M1.6: Claude Code executor | todo                         |
+| M1.8: Build + gate                      | M               | M1.7: Refinement                                                            | todo                         |
+| M1.9: Quota capture                     | S               | M1.6: Claude Code executor                                                  | todo                         |
 
-Next unblocked once Foundations (M0) is done: MCP OAuth spike (M1.1) and Ticket core (M1.2), in parallel.
+Next, in parallel, once M0: Foundations merges:
+
+- M1.1: MCP OAuth spike
+- M1.2: Ticket core
 
 **Pending decisions (Andy):**
 
-- First real project to onboard (open question 8); needed by GitHub App + project registration (M1.5).
-- Claude plan and headless billing (open question 5); needed by Claude Code executor (M1.6).
-- MCP OAuth mechanism: answered by MCP OAuth spike (M1.1).
+- First real project to onboard (open question 8); needed by M1.5: GitHub App + project registration.
+- Claude plan and headless billing (open question 5); needed by M1.6: Claude Code executor.
+- MCP OAuth mechanism: answered by M1.1: MCP OAuth spike.
 
 **Blocked on Andy:**
 
-- Foundations (M0): runbook steps 0–4 (`docs/runbooks/m0-setup.md`), first `terraform plan` review, merge the Foundations PR (#1).
+- M0: Foundations: runbook steps 0–4 (`docs/runbooks/m0-setup.md`), first `terraform plan` review, merge PR #1: Foundations.

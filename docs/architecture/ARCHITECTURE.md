@@ -3,7 +3,7 @@ title: andy-intelligence — Architecture & Vision
 status: accepted (v1.x scope)
 owner: Andy
 last_updated: 2026-10-22
-revision: 2026-10-22c (descriptive milestone titles)
+revision: 2026-10-22d (ID: title naming)
 ---
 
 # andy-intelligence — Architecture & Vision
@@ -110,7 +110,7 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 ### 4.5 Review gate (v1.x: rules only)
 - **Hard vetoes → Andy reviews:** protected paths (CODEOWNERS: auth, payments, migrations, infra), dependency changes, CI not green, new behavior without new tests, diff > N lines, any agent-raised concern.
 - **Otherwise:** S tasks may auto-merge if project policy allows; M/L always go to Andy in v1.x.
-- From M1 onward, **record what the gate *would* have decided** to build the dataset for later model-based scoring.
+- From M1: First end-to-end flow onward, **record what the gate *would* have decided** to build the dataset for later model-based scoring.
 - Cross-model review: a reviewer from a different vendor than the implementer comments on every PR.
 
 ### 4.6 Environments and release
@@ -200,7 +200,7 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 
 ### 7.2 Executors
 - **Claude Code**: reusable GitHub Actions workflow using `anthropics/claude-code-action` with `CLAUDE_CODE_OAUTH_TOKEN`; dispatched via `workflow_dispatch` with the run ID (non-secret) as input; reports back via an API callback authenticated with the workflow's GitHub OIDC token. Uses the platform skills plugin and subagents.
-- **Ticket context for agents** (all executors): the dispatch request carries the ticket snapshot (title, body, acceptance criteria, assumptions, answered questions). In M1 that snapshot plus the callback (report/comment/question on its own ticket) is all an agent gets. From M4, agents that need more call the API/MCP read-only, scoped to that ticket's project, authenticated the same way (OIDC for Actions runs; a per-run token minted at dispatch for non-Actions executors).
+- **Ticket context for agents** (all executors): the dispatch request carries the ticket snapshot (title, body, acceptance criteria, assumptions, answered questions). In M1: First end-to-end flow, that snapshot plus the callback (report/comment/question on its own ticket) is all an agent gets. From M4: Second project + epics + story board, agents that need more call the API/MCP read-only, scoped to that ticket's project, authenticated the same way (OIDC for Actions runs; a per-run token minted at dispatch for non-Actions executors).
 - **OpenCode**: reusable Actions workflow running OpenCode with a per-project OpenRouter key; default harness for non-Claude models. Same callback auth as Claude Code.
 - **Jules**: REST API (`sessions`, `activities`, `approvePlan`, `sendMessage`), configured to open a PR on completion. Completion is detected via the PR webhook (§7.1); `activities` are read on demand (watchdog, run detail view), not polled.
 - **Direct**: in-process OpenRouter calls for single-call steps (sizing, question drafting where non-agentic, digests, scout analysis).
@@ -272,7 +272,7 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 - Run records (tokens, cost, outcome, quota snapshot) in Firestore drive the UI; rollups via aggregation queries (§5).
 - Paid cost from OpenRouter usage; subscription runs record **API-equivalent cost estimates** (labelled as estimates) alongside quota %.
 - Transcripts are not stored; run detail links to the Action log / Jules session / PR.
-- **Backups:** Firestore is the only copy of tickets, so daily Firestore scheduled backups (short retention; pennies at this size) ship in M1. Optional BigQuery export for ad-hoc analytics later.
+- **Backups:** Firestore is the only copy of tickets, so daily Firestore scheduled backups (short retention; pennies at this size) ship in M1: First end-to-end flow. Optional BigQuery export for ad-hoc analytics later.
 
 ---
 
@@ -284,7 +284,7 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 | API | Node HTTP framework with Zod-based OpenAPI generation (builder to propose; e.g., Hono + zod-openapi) |
 | MCP | Official MCP TypeScript SDK, Streamable HTTP, OAuth |
 | DB | Firestore (Native mode, default database, us-central1; free tier) with Zod-validated converters; no migrations (ADR-0017) |
-| UI | React, Vite, shadcn/ui, Tailwind, TanStack Router/Query/Table, dnd-kit (story board, M4), shadcn charts; OpenAPI-generated client |
+| UI | React, Vite, shadcn/ui, Tailwind, TanStack Router/Query/Table, dnd-kit (story board, from M4: Second project + epics + story board), shadcn charts; OpenAPI-generated client |
 | Runtime | Cloud Run (single service), Cloud Tasks, Cloud Scheduler (weekly scout), Secret Manager |
 | Auth | Firebase Auth / Identity Platform (Google) + MCP OAuth facade; GitHub Actions OIDC for agent callbacks |
 | Work tracker | Native in Firestore + in-app UI + MCP (ADR-0016) |
@@ -310,7 +310,7 @@ Each milestone must work **end to end** before the next starts. Acceptance crite
 | M4 | Second project + epics + story board | Second repo onboarded; epics; drag-and-drop board; config editing |
 | M5 | Dev → prod releases | Per-project dev/prod deploys, verification, one-click promote, auto-merge for small tasks |
 
-**Naming:** always write a milestone or slice as *title (ID)*, e.g. "Ticket core (M1.2)". The ID alone means nothing to a reader.
+**Naming:** always write a milestone or slice as `ID: title`, e.g. "M1.2: Ticket core". The ID alone means nothing to a reader.
 
 ### How milestones are built: slices
 Each milestone is delivered as **slices**. A slice:
@@ -321,40 +321,43 @@ Each milestone is delivered as **slices**. A slice:
 
 `docs/build-log.md` tracks slice status (todo / in progress / PR open / merged) until the system can track its own work. The milestone's **Done when** is checked only after all its slices merge.
 
-### Foundations: repo, sign-in, GCP infra (M0)
+### M0: Foundations: repo, sign-in, GCP infra
 Repo scaffold, contracts package, Terraform for control-plane GCP project (plan reviewed by Andy), Firestore database (server-only access), auth (UI + API allow-list), CI, ADRs for decisions in this doc.
 **Done when:** Andy can sign in to an empty UI on Cloud Run; unauthorized users are rejected; `terraform plan` is clean.
 
-### First end-to-end flow: ticket → PR with Claude (M1)
+### M1: First end-to-end flow: ticket → PR with Claude
 **Done when:** From Claude desktop, Andy creates a ticket → agent asks refinement questions → Andy answers via MCP → ticket reaches Ready → Claude builds → PR opens → Andy merges → run shows in the UI with cost/quota.
 
-**Explicitly not in M1:** drag-and-drop board, epics, dedicated run-detail screen, agent read access to API/MCP, auto-merge, routing beyond the single Claude route.
+**Explicitly not in M1: First end-to-end flow:** drag-and-drop board, epics, dedicated run-detail screen, agent read access to API/MCP, auto-merge, routing beyond the single Claude route.
 
 | Slice | Scope | Size | Depends on | Done when |
 |---|---|---|---|---|
-| **Docs sync (M1.0)** | Bring this revision into the repo; ADRs for: Jules completion via PR webhook (§7.1), agent callback auth via Actions OIDC (§9), rollups via aggregation (§5), M1 scope/slicing (§12), docs upkeep (§14), contract suites for every port (§6). Resolve ADR-0012 with Andy. | S | Foundations (M0) | ADRs merged; ADR-0012 accepted or rejected |
-| **MCP OAuth spike (M1.1)** | Timeboxed (≤1 session). Prove Claude desktop custom connector → `/mcp` with Google-delegated OAuth and the allow-list. Throwaway `ping` tool only. Resolves open question 9. | M | Foundations (M0) | Andy adds the connector in Claude desktop and calls `ping`; non-allow-listed account rejected; ADR records the mechanism |
-| **Ticket core (M1.2)** | Contracts (Project, Ticket, TicketEvent, Question, Run); domain stage machine + DoR (with tests); Firestore store + converters; REST endpoints; Terraform for daily Firestore backup + Cloud Tasks queue + invoker SA. | M | Foundations (M0) | API tests pass; `terraform plan` reviewed/applied by Andy; tickets created via API appear in Firestore with events |
-| **UI: tickets + inbox (M1.3)** | Ticket list grouped by stage, create/edit, detail with history, Needs-you inbox, answer question. | M | Ticket core (M1.2) | Andy creates a ticket, sees history, answers a seeded question in the UI |
-| **MCP core tools (M1.4)** | `create_ticket`, `list_needs_me`, `answer_question`, `status` using the auth proven in MCP OAuth spike (M1.1). | S | MCP OAuth spike (M1.1), Ticket core (M1.2) | Same flows as M1.3 work from Claude desktop |
-| **GitHub App + project registration (M1.5)** | `CodeHost` port + fake + contract suite; register the App (Andy creates it; builder provides manifest/instructions), webhook receiver (HMAC, idempotent by delivery ID), register one project and its repo. | M | Ticket core (M1.2) | A PR/check event on the registered repo lands as an idempotent record; replayed delivery is a no-op |
-| **Claude Code executor (M1.6)** | Reusable workflow; `workflow_dispatch` from the App with run ID; OIDC-authenticated callback; Run records; Cloud Tasks watchdog at deadline; one automatic retry then Needs-you. Use a no-op "echo" step for testing. | L → split if it grows (6a dispatch+callback, 6b watchdog+retry) | GitHub App + project registration (M1.5) | An echo run dispatches, calls back, and completes; a killed run is caught by the watchdog and flagged |
-| **Refinement (M1.7)** | `refine` step on the executor; questions written as structured records → inbox; answering re-runs DoR → Ready. | M | UI: tickets + inbox (M1.3), MCP core tools (M1.4), Claude Code executor (M1.6) | A new ticket gets 1–5 questions; answering via MCP moves it to Ready |
-| **Build + gate (M1.8)** | Dispatcher picks Ready tickets; `build` step opens PR with structured summary and ticket key; all merges gated (Andy); `would_auto_merge` recorded; outcome set from merge/close webhook; cost estimate on the Run. | M | Refinement (M1.7) | Ready ticket → PR → Andy merges → ticket advances; Run shows cost estimate and outcome |
-| **Quota capture (M1.9)** | Timeboxed, best-effort. Capture claude-sub `rate_limits` from runs if available headless; otherwise readings stay **unknown** per policy. UI banner on warn/pause/unknown. | S | Claude Code executor (M1.6) | Gauge shows a reading or "unknown"; banner appears at thresholds (test with seeded readings) |
+| **M1.0: Docs sync** | Bring this revision into the repo; ADRs for: Jules completion via PR webhook (§7.1), agent callback auth via Actions OIDC (§9), rollups via aggregation (§5), M1 scope/slicing (§12), docs upkeep (§14), contract suites for every port (§6). Resolve ADR-0012 with Andy. | S | M0: Foundations | ADRs merged; ADR-0012 accepted or rejected |
+| **M1.1: MCP OAuth spike** | Timeboxed (≤1 session). Prove Claude desktop custom connector → `/mcp` with Google-delegated OAuth and the allow-list. Throwaway `ping` tool only. Resolves open question 9. | M | M0: Foundations | Andy adds the connector in Claude desktop and calls `ping`; non-allow-listed account rejected; ADR records the mechanism |
+| **M1.2: Ticket core** | Contracts (Project, Ticket, TicketEvent, Question, Run); domain stage machine + DoR (with tests); Firestore store + converters; REST endpoints; Terraform for daily Firestore backup + Cloud Tasks queue + invoker SA. | M | M0: Foundations | API tests pass; `terraform plan` reviewed/applied by Andy; tickets created via API appear in Firestore with events |
+| **M1.3: UI: tickets + inbox** | Ticket list grouped by stage, create/edit, detail with history, Needs-you inbox, answer question. | M | M1.2: Ticket core | Andy creates a ticket, sees history, answers a seeded question in the UI |
+| **M1.4: MCP core tools** | `create_ticket`, `list_needs_me`, `answer_question`, `status` using the auth proven in M1.1: MCP OAuth spike. | S | M1.1: MCP OAuth spike, M1.2: Ticket core | Same flows as M1.3 work from Claude desktop |
+| **M1.5: GitHub App + project registration** | `CodeHost` port + fake + contract suite; register the App (Andy creates it; builder provides manifest/instructions), webhook receiver (HMAC, idempotent by delivery ID), register one project and its repo. | M | M1.2: Ticket core | A PR/check event on the registered repo lands as an idempotent record; replayed delivery is a no-op |
+| **M1.6: Claude Code executor** | Reusable workflow; `workflow_dispatch` from the App with run ID; OIDC-authenticated callback; Run records; Cloud Tasks watchdog at deadline; one automatic retry then Needs-you. Use a no-op "echo" step for testing. | L → split if it grows (6a dispatch+callback, 6b watchdog+retry) | M1.5: GitHub App + project registration | An echo run dispatches, calls back, and completes; a killed run is caught by the watchdog and flagged |
+| **M1.7: Refinement** | `refine` step on the executor; questions written as structured records → inbox; answering re-runs DoR → Ready. | M | M1.3: UI: tickets + inbox, M1.4: MCP core tools, M1.6: Claude Code executor | A new ticket gets 1–5 questions; answering via MCP moves it to Ready |
+| **M1.8: Build + gate** | Dispatcher picks Ready tickets; `build` step opens PR with structured summary and ticket key; all merges gated (Andy); `would_auto_merge` recorded; outcome set from merge/close webhook; cost estimate on the Run. | M | M1.7: Refinement | Ready ticket → PR → Andy merges → ticket advances; Run shows cost estimate and outcome |
+| **M1.9: Quota capture** | Timeboxed, best-effort. Capture claude-sub `rate_limits` from runs if available headless; otherwise readings stay **unknown** per policy. UI banner on warn/pause/unknown. | S | M1.6: Claude Code executor | Gauge shows a reading or "unknown"; banner appears at thresholds (test with seeded readings) |
 
-Parallelizable after Ticket core (M1.2): UI: tickets + inbox (M1.3), MCP core tools (M1.4, once MCP OAuth spike M1.1 is done), and GitHub App + project registration (M1.5).
+Can run in parallel once M1.2: Ticket core merges:
+- M1.3: UI: tickets + inbox
+- M1.4: MCP core tools (also needs M1.1: MCP OAuth spike)
+- M1.5: GitHub App + project registration
 
-### Add Jules + model routing (M2)
+### M2: Add Jules + model routing
 Jules adapter (completion via PR webhook); freeze `Executor` contract (two adapters pass contract tests); harness/provider/model/tier config with compatibility rules; size-based routing; cross-model review; google-sub quota (task counting) and reserves. Slice at milestone start.
 
-### Paid models + spend caps (M3)
+### M3: Paid models + spend caps
 OpenCode executor via Actions; OpenRouter direct-call gateway for single-call steps; global and per-project caps with hard stops; quota-aware route fallback with 20% reserves; weekly model scout producing pending tier changes; initial tier list seeded by scout. Slice at milestone start.
 
-### Second project + epics + story board (M4)
+### M4: Second project + epics + story board
 Second real project onboarded via template + bootstrap; agent read access to API/MCP scoped per project; epics with child tickets and dependencies; just-in-time re-planning; config editing and audit/revert in UI and MCP; drag-and-drop story board; dedicated run-detail screen. Slice at milestone start.
 
-### Dev → prod releases (M5)
+### M5: Dev → prod releases
 Project template Terraform + Cloud Deploy dev→prod; dev deploy + verification (Playwright/API tests + verification agent); promote/rollback from UI and MCP; release notes; rule-based auto-merge for S tasks. Slice at milestone start.
 
 ### Later (explicitly deferred)
@@ -366,16 +369,16 @@ Prod monitoring agent and alert→ticket flow; write-approval execution; model-b
 
 Resolved in M0: GitHub home (personal account, public repos — ADR-0003); GCP project `andy-intelligence-512400` in `us-central1` (ADR-0007); Firestore (ADR-0017); default run.app URL (ADR-0007); work tracking native (ADR-0016).
 
-Resolved in M1.0 (ADR-0018 – ADR-0023): Jules completion detection (PR webhook + deadline watchdog); agent callback auth (GitHub Actions OIDC); rollups (aggregation queries); M1 scope cuts and slicing; docs upkeep; contract suites for every port (ADR-0012 rejected).
+Resolved in M1.0: Docs sync (ADR-0018 – ADR-0024): Jules completion detection (PR webhook + deadline watchdog); agent callback auth (GitHub Actions OIDC); rollups (aggregation queries); M1 scope cuts and slicing; docs upkeep; contract suites for every port (ADR-0012 rejected).
 
 Remaining:
 
-2. Naming convention for per-project dev/prod GCP projects (M5).
+2. Naming convention for per-project dev/prod GCP projects (needed by M5: Dev → prod releases).
 5. Claude plan (Pro vs Max) — affects automated-run budget; confirm current billing for Action/headless usage.
 6. Google plan (AI Pro vs Ultra) and current Jules daily task quota.
 7. OpenRouter: account exists? initial monthly/daily caps?
-8. First real side project to onboard in M1 (and is andy-intelligence itself project #2 for dogfooding?).
-9. Claude custom-connector OAuth mechanism currently supported (dynamic client registration vs static client) — **answered by slice M1.1**.
+8. First real side project to onboard in M1: First end-to-end flow (and is andy-intelligence itself project #2 for dogfooding?).
+9. Claude custom-connector OAuth mechanism currently supported (dynamic client registration vs static client) — **answered by M1.1: MCP OAuth spike**.
 10. Whether the Jules GitHub integration or the Jules REST API should be the dispatch path (REST preferred for run tracking; must support auto-PR creation for the completion signal).
 
 ---

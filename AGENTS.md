@@ -8,7 +8,7 @@ Always loaded (`CLAUDE.md` is a symlink to this file). Full operating rules: [`d
 2. Stop and ask before anything that costs money, touches cloud resources, IAM, secrets, external accounts, or `main`, or deviates from ARCHITECTURE.md.
 3. The repo is public: no secrets, tokens, personal emails, `*.tfvars`, `.env*`, or Terraform state — ever (ADR-0015).
 
-4. Talking to Andy (chat, PRs, docs): be brief, and never use a bare ID. Lead with a descriptive title, ID in parentheses: "Ticket core (M1.2)", "Foundations: repo, sign-in, GCP infra (M0)", "Actions OIDC callbacks (ADR-0019)", "Foundations PR (#1)". Milestone titles: ARCHITECTURE §12.
+4. Talking to Andy (chat, PRs, docs): be brief, and never use a bare ID. Write `ID: title`: "M1.2: Ticket core", "M0: Foundations: repo, sign-in, GCP infra", "ADR-0019: Actions OIDC callbacks", "PR #1: Foundations". Milestone titles: ARCHITECTURE §12.
 
 ## Docs ship with the change (ADR-0022)
 

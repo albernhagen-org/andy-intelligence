@@ -2,7 +2,7 @@
 
 ## Why
 
-<!-- Slice as title (ID), e.g. "Ticket core (M1.2)", and its "Done when". Never a bare ID. -->
+<!-- Slice as `ID: title`, e.g. "M1.2: Ticket core", and its "Done when". Never a bare ID. -->
 
 ## Risks
 

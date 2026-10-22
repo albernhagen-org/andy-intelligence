@@ -61,7 +61,7 @@ If a verified fact contradicts the architecture, stop and ask how to proceed.
 ### 4. Milestone and slice discipline
 
 - Work strictly milestone by milestone (M0 → M5). **Do not start a milestone until the previous one meets its "Done when" criteria and I confirm.**
-- Each milestone is built as **slices** (ARCHITECTURE §12): one PR per slice, its own "Done when", sized for one session. M1's slices are defined in the doc; for M2–M5, propose the slice table (scope, size, depends on, done when) at milestone start and wait for my go-ahead.
+- Each milestone is built as **slices** (ARCHITECTURE §12): one PR per slice, its own "Done when", sized for one session. Slices for M1: First end-to-end flow are defined in the doc; for later milestones (M2–M5, titles in ARCHITECTURE §12), propose the slice table (scope, size, depends on, done when) at milestone start and wait for my go-ahead.
 - **One slice per session by default.** Start by reading `docs/build-log.md` to find the next unblocked slice; confirm it with me; work on a branch named `m<N>.<slice>/<short-name>`.
 - Independent slices may run in parallel sessions or worktrees. Never start a slice whose dependencies haven't merged. **No stacked PRs:** every slice branches from the latest `main` and targets `main`.
 - At the end of a slice: update the docs the change affects (ARCHITECTURE §14), open the PR, update `docs/build-log.md`, and give me the demo steps for its "Done when".
@@ -81,11 +81,11 @@ If a verified fact contradicts the architecture, stop and ask how to proceed.
 ### 6. Communication
 
 - Brief status updates; no narration of every step.
-- Never use a bare ID (milestone, slice, PR, ADR, open question, runbook step) in chat, PR titles/descriptions, or docs. Lead with a descriptive title, ID in parentheses: "Ticket core (M1.2)", "Foundations: repo, sign-in, GCP infra (M0)", "Actions OIDC callbacks (ADR-0019)". Milestone titles are in ARCHITECTURE §12.
+- Never use a bare ID (milestone, slice, PR, ADR, open question, runbook step) in chat, PR titles/descriptions, or docs. Write `ID: title`: "M1.2: Ticket core", "M0: Foundations: repo, sign-in, GCP infra", "ADR-0019: Actions OIDC callbacks", "PR #1: Foundations". Milestone titles are in ARCHITECTURE §12.
 - When blocked on me, say exactly what you need and why, in one message.
 - If you think a requirement is wrong or over-engineered, say so directly with a recommendation.
 
-## Suggested repo layout (confirm or propose changes in M0)
+## Suggested repo layout (already adopted in M0: Foundations)
 
 ```
 andy-intelligence/
@@ -116,16 +116,16 @@ andy-intelligence/
 
 - Read `AGENTS.md`, `docs/architecture/ARCHITECTURE.md`, `docs/build-log.md`, ADRs in `docs/architecture/adr/`, and `docs/runbooks/m0-setup.md` on `main` (or on the open M0 / M1.0 branches if they haven't merged).
 - Key decisions already made (don't relitigate without new facts): personal public GitHub repo (ADR-0003); native work tracking with in-app UI + MCP, GitHub for code only (ADR-0016); Firestore, event-driven, no polling (ADR-0017); GCP project `andy-intelligence-512400`, `us-central1`, default run.app URL (ADR-0007); app-level auth on a public Cloud Run service (ADR-0010); Terraform plans in CI, applies by Andy locally (ADR-0011); public-repo secret hygiene (ADR-0015).
-- Decided in slice M1.0 (ADR-0018 – ADR-0024): Jules completion via PR webhook + deadline watchdog; agent callbacks authenticated with GitHub Actions OIDC; rollups via Firestore aggregation queries; M1 scope cuts (list view, no DnD board) and slicing; docs ship with the change; ADR-0012 **rejected** — every port gets a fake + contract suite; no stacked PRs; Terraform pinned via tenv (ADR-0024).
-- Pending decisions: MCP OAuth mechanism (slice M1.1).
-- PRs: the Foundations PR (#1, `m0/foundations` → `main`) also carries the Docs sync slice (M1.0). Terraform has never been validated or planned — CI's `terraform validate` and Andy's first `terraform plan` will be its first real test.
+- Decided in M1.0: Docs sync (ADR-0018 – ADR-0024): Jules completion via PR webhook + deadline watchdog; agent callbacks authenticated with GitHub Actions OIDC; rollups via Firestore aggregation queries; M1 scope cuts (list view, no DnD board) and slicing; docs ship with the change; ADR-0012 **rejected** — every port gets a fake + contract suite; no stacked PRs; Terraform pinned via tenv (ADR-0024).
+- Pending decisions: MCP OAuth mechanism (answered by M1.1: MCP OAuth spike).
+- PRs: PR #1: Foundations (`m0/foundations` → `main`) also carries M1.0: Docs sync. Terraform has never been validated or planned — CI's `terraform validate` and Andy's first `terraform plan` will be its first real test.
 
 ## Your first response
 
 1. Confirm what you've read and the current state in ≤5 bullets.
-2. Check CI on the Foundations PR (#1). If CI fails, fix it on `m0/foundations`.
+2. Check CI on PR #1: Foundations. If CI fails, fix it on `m0/foundations`.
 3. Walk me through `docs/runbooks/m0-setup.md` one step at a time. For Terraform, have me run `terraform plan` (or run it yourself if you have my credentials locally) and review the full output with me before any `apply`.
-4. When Foundations (M0) "Done when" is verified and PR #1 is merged, confirm the next unblocked slice of the first end-to-end flow (M1) from `docs/build-log.md` and wait for my go-ahead.
+4. When the "Done when" of M0: Foundations is verified and PR #1 is merged, confirm the next unblocked slice of M1: First end-to-end flow from `docs/build-log.md` and wait for my go-ahead.
 
 ## Later sessions
 
