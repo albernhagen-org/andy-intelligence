@@ -24,7 +24,7 @@ provider "google" {
 }
 
 locals {
-  repo_full_name = "${var.github_org}/${var.github_repo}"
+  repo_full_name = "${var.github_owner}/${var.github_repo}"
 }
 
 resource "google_project_service" "apis" {

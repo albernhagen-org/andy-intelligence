@@ -6,7 +6,7 @@ One-time steps that need your credentials. **This repo is public:** nothing in t
 
 **Let Claude push branches** — install the Claude GitHub App on the org:
 
-1. Open https://github.com/apps/claude/installations/select_target → choose **albernhagen-org**.
+1. Open https://github.com/apps/claude/installations/select_target → choose your personal account **albernhagen**.
 2. Repository access → **Only select repositories** → `andy-intelligence` → Install.
 
 **Secret protection** (Settings → Advanced Security / Code security):

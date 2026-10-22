@@ -38,7 +38,7 @@ data "google_project" "this" {
 
 locals {
   service_name   = "control-plane"
-  repo_full_name = "${var.github_org}/${var.github_repo}"
+  repo_full_name = "${var.github_owner}/${var.github_repo}"
   # Cloud Run's deterministic URL; known before the service exists, so no dependency cycle.
   service_host = "${local.service_name}-${data.google_project.this.number}.${var.region}.run.app"
   wif_pool     = "projects/${data.google_project.this.number}/locations/global/workloadIdentityPools/github"

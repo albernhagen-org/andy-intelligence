@@ -4,7 +4,7 @@ Temporary progress log until andy-intelligence can track its own work (then migr
 
 ## 2026-10-21 — M0 started
 
-**Decided (Andy):** GitHub org `albernhagen-org`; GCP project `andy-intelligence-512400`; Neon free tier; `us-central1`; default run.app URL; standard TS stack. See ADR-0003, 0007, 0008, 0009.
+**Decided (Andy):** GitHub org `albernhagen-org` (superseded: personal public repo `albernhagen/andy-intelligence`, ADR-0003); GCP project `andy-intelligence-512400`; Neon free tier; `us-central1`; default run.app URL; standard TS stack. See ADR-0003, 0007, 0008, 0009.
 
 **Done (branch `m0/foundations`):**
 

@@ -9,9 +9,9 @@ variable "region" {
   default = "us-central1"
 }
 
-variable "github_org" {
+variable "github_owner" {
   type    = string
-  default = "albernhagen-org"
+  default = "albernhagen"
 }
 
 variable "github_repo" {
