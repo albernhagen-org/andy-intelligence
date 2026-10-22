@@ -8,6 +8,8 @@ Always loaded (`CLAUDE.md` is a symlink to this file). Full operating rules: [`d
 2. Stop and ask before anything that costs money, touches cloud resources, IAM, secrets, external accounts, or `main`, or deviates from ARCHITECTURE.md.
 3. The repo is public: no secrets, tokens, personal emails, `*.tfvars`, `.env*`, or Terraform state — ever (ADR-0015).
 
+4. Talking to Andy: be brief, and never cite a bare ID — always add its short title ("ADR-0019 (Actions OIDC callbacks)", "PR #1 (M0 foundations)").
+
 ## Docs ship with the change (ADR-0022)
 
 Update these in the **same PR** as the code:

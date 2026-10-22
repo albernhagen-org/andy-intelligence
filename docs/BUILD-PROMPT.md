@@ -80,6 +80,7 @@ If a verified fact contradicts the architecture, stop and ask how to proceed.
 ### 6. Communication
 
 - Brief status updates; no narration of every step.
+- Whenever you cite an ID (PR #, ADR number, slice, open question, step), give its short title with it — e.g. "PR #1 (M0 foundations)", "ADR-0019 (Actions OIDC callbacks)". Never a bare number.
 - When blocked on me, say exactly what you need and why, in one message.
 - If you think a requirement is wrong or over-engineered, say so directly with a recommendation.
 
