@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: rejected (superseded by 0023)
 date: 2026-10-21
 ---
 

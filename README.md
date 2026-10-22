@@ -1,6 +1,19 @@
 # andy-intelligence
 
-Personal control plane for agentic software development. Architecture: [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md). Decisions: [`docs/architecture/adr/`](docs/architecture/adr/). Progress: [`docs/build-log.md`](docs/build-log.md).
+Personal control plane for agentic software development: ideas → refined tickets → agent runs (Claude Code, Jules, OpenCode) under cost and quota controls → PRs → dev → one-click prod.
+
+## Docs
+
+| Doc                                                                      | What                                                        |
+| ------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) | Design and milestone/slice plan — source of truth           |
+| [`docs/architecture/adr/`](docs/architecture/adr/)                       | Architecture decisions (MADR)                               |
+| [`docs/build-log.md`](docs/build-log.md)                                 | Slice status, pending decisions, blockers                   |
+| [`docs/runbooks/`](docs/runbooks/)                                       | Manual steps (setup, secrets, apply)                        |
+| [`AGENTS.md`](AGENTS.md)                                                 | Rules for agents working in this repo (`CLAUDE.md` symlink) |
+| [`docs/BUILD-PROMPT.md`](docs/BUILD-PROMPT.md)                           | Session prompt for the building agent                       |
+
+Docs ship with the change: a PR that changes commands, layout, design, or a decision updates the matching doc (ARCHITECTURE §14, ADR-0022).
 
 ## Develop
 

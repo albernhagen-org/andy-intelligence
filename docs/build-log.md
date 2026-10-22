@@ -25,14 +25,37 @@ Temporary progress log until andy-intelligence can track its own work (then migr
 
 **Decided (Andy, 2026-10-21 late):** Firestore replaces Neon/Postgres (ADR-0017, supersedes 0008 and 0013). Event-driven flow: per-run Cloud Tasks watchdog instead of a polling reconciler; weekly scout is the only scheduled job. Cloud SQL priced at ≈$9.50/mo and rejected.
 
+## 2026-10-22 — M0 PR opened; M1.0 docs sync
+
+- M0 PR opened: #1 (`m0/foundations` → `main`). Runbook steps 0–4 still pending.
+- M1.0 (`m1.0/docs-sync`, stacked on #1): ARCHITECTURE revision `2026-10-22a`; ADRs 0018–0023; `AGENTS.md` (+ `CLAUDE.md` symlink); PR template with docs checklist; build prompt moved to slices.
+- **Decided (Andy):** ADR-0012 rejected — every port gets a fake + contract suite, written in the slice that first uses the port (ADR-0023). Docs ship with the change (ADR-0022). M1 sliced (ADR-0021).
+
+## M1 slices
+
+Status: todo / in progress / PR open / merged. Definitions: ARCHITECTURE §12.
+
+| Slice                                  | Size            | Depends on       | Status                  |
+| -------------------------------------- | --------------- | ---------------- | ----------------------- |
+| M1.0 Docs sync                         | S               | M0               | PR open (stacked on #1) |
+| M1.1 MCP OAuth spike                   | M               | M0               | todo                    |
+| M1.2 Ticket core                       | M               | M0               | todo                    |
+| M1.3 UI: tickets + inbox               | M               | M1.2             | todo                    |
+| M1.4 MCP core tools                    | S               | M1.1, M1.2       | todo                    |
+| M1.5 GitHub App + project registration | M               | M1.2             | todo                    |
+| M1.6 Claude Code executor              | L (split 6a/6b) | M1.5             | todo                    |
+| M1.7 Refinement                        | M               | M1.3, M1.4, M1.6 | todo                    |
+| M1.8 Build + gate                      | M               | M1.7             | todo                    |
+| M1.9 Quota capture                     | S               | M1.6             | todo                    |
+
+Next unblocked once M0 is done: M1.1 and M1.2 (parallel).
+
 **Pending decisions (Andy):**
 
-- ADR-0012 (proposed): contract suites only for WorkTracker/Executor/QuotaSource.
-- MCP OAuth spike: end of M0 or start of M1?
+- First real project to onboard in M1 (open question 8); needed by M1.5.
+- Claude plan and headless billing (open question 5); needed by M1.6.
+- MCP OAuth mechanism: answered by M1.1.
 
 **Blocked on Andy:**
 
-- Open the M0 PR (this session can push via the old org URL redirect but can't create PRs).
-- Runbook steps 0–4 (step 5 is now a no-op).
-
-**Session note:** future sessions should use `albernhagen/andy-intelligence` as the source repo.
+- M0: runbook steps 0–4 (`docs/runbooks/m0-setup.md`), first `terraform plan` review, merge #1.

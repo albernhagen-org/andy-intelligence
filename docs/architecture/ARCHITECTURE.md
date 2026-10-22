@@ -2,7 +2,8 @@
 title: andy-intelligence — Architecture & Vision
 status: accepted (v1.x scope)
 owner: Andy
-last_updated: 2026-10-21
+last_updated: 2026-10-22
+revision: 2026-10-22a (ADR-0012 rejected; docs upkeep rule)
 ---
 
 # andy-intelligence — Architecture & Vision
@@ -17,7 +18,7 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ### Goals (v1.x)
 1. **Ideate with system context.** Design new features with knowledge of the current architecture and shipped features; outputs become markdown in the project repo.
-2. **Ticketing from anywhere.** Create and refine work in the UI's story board or conversationally from any MCP-capable AI tool (Claude desktop first).
+2. **Ticketing from anywhere.** Create and refine work in the UI or conversationally from any MCP-capable AI tool (Claude desktop first).
 3. **Mandatory refinement.** Every story gets a refinement pass in which agents ask Andy targeted questions before work starts.
 4. **Autonomous end-to-end by default**, with overrides at global → project → epic → ticket level.
 5. **Cost and quota control.** Visibility into subscription usage and pay-per-use spend; reserves on subscriptions (Andy uses them outside this system); hard caps on paid spend; warnings in the UI.
@@ -39,13 +40,14 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ## 2. Core principles
 
-1. **LLMs decide; deterministic systems hold state.** Agents refine, split, size, design, implement, review. State lives in Firestore; the control-plane service itself is stateless. Flow is **event-driven** (callbacks, webhooks, queued tasks), not polling.
+1. **LLMs decide; deterministic systems hold state.** Agents refine, split, size, design, implement, review. State lives in Firestore; the control-plane service itself is stateless. Flow is **event-driven** (callbacks, webhooks, queued tasks), not polling. The only time the system actively checks an external system is a per-run watchdog firing at that run's timeout (§7.1).
 2. **Firestore is the system of record for work (tickets, questions, history), configuration, runs, and spend. GitHub is the system of record for code** (repos, PRs, CI, Actions as the agent runtime). Every ticket links to its runs, PRs, models, and costs in one place (ADR-0016).
 3. **Read freely, write with approval.** Agents hold read-only credentials everywhere. Code changes arrive as PRs. Infrastructure changes arrive as Terraform PRs. Prod changes require Andy.
 4. **Contract-first, adapters behind ports.** Vendor concepts never leak into the domain.
 5. **Ask, don't assume.** Agents (including the agents building this system) escalate ambiguity as structured questions rather than guessing on anything consequential.
 6. **Everything configurable in the UI, everything audited.**
 7. **Untrusted content is data, never instructions.** Issue bodies, comments, web pages, and logs may contain prompt injection.
+8. **Docs ship with the change.** A PR that changes behavior, structure, setup, or a decision updates the affected docs in the same PR (§14). This applies to the control plane and to every managed project.
 
 ---
 
@@ -72,7 +74,7 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ## 4. Workflow
 
-### 4.1 Stages (`ticket.stage`, shown as columns on the in-app story board)
+### 4.1 Stages (`ticket.stage`, shown as columns/groups in the UI)
 
 | Stage | What happens | Exit criteria (automatic unless overridden) |
 |---|---|---|
@@ -122,15 +124,17 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ## 5. Domain model (Firestore documents)
 
-All records carry `project_id` where applicable. Documents are validated with the Zod schemas in `packages/contracts` on every read and write; tickets and their events nest under their project (`projects/{p}/tickets/{t}/events/{e}`). Rollups (cost per ticket/epic/model) are maintained when a run finishes, or computed with Firestore aggregation queries.
+All records carry `project_id` where applicable. Documents are validated with the Zod schemas in `packages/contracts` on every read and write; tickets and their events nest under their project (`projects/{p}/tickets/{t}/events/{e}`).
+
+**Rollups** (cost per ticket/epic/model/provider) are **computed on read with Firestore aggregation queries** in v1.x — no denormalized counters to keep consistent. Revisit only if reads get measurably slow.
 
 | Entity | Key fields |
 |---|---|
-| **Project** | name, repos, GitHub board ref, GCP dev/prod project IDs, policy overrides, budget allocation, autonomy level, enabled |
+| **Project** | name, repos, GCP dev/prod project IDs, policy overrides, budget allocation, autonomy level, enabled |
 | **Ticket** (system of record) | key (e.g. `AI-42`), title, body, acceptance criteria (EARS), assumptions, type (epic/story/task/bug), parent, stage, size, tier, overrides (assignee agent/me, tier, model pin, autonomy, target env), needs_you, DoR status, rank, blocked_by (ticket ids) |
 | **TicketEvent** | ticket, kind (comment / stage_change / field_change / run_linked / pr_linked …), actor (andy / agent:<run> / system), body/diff, timestamp — the ticket's full history |
 | **Question** | ticket, text, options, suggested_answer, assumptions, urgency, status, answer, answered_via, timestamps |
-| **Run** | ticket, step (refine/plan/build/review/verify/scout), harness, provider, model, tier, status, started/ended, tokens, cost_usd (actual or API-equivalent estimate), quota snapshot, links (Action run, Jules session, PR), **outcome** (merged_clean / reworked / reverted / failed), would_auto_merge |
+| **Run** | ticket, step (refine/plan/build/review/verify/scout), harness, provider, model, tier, status, started/ended, deadline, tokens, cost_usd (actual or API-equivalent estimate), quota snapshot, links (Action run, Jules session, PR), executor identity (e.g. Actions `run_id` + workflow ref, Jules session id) used to authenticate/correlate completion signals, **outcome** (merged_clean / reworked / reverted / failed), would_auto_merge |
 | **Provider** | key (claude-sub, google-sub, openrouter), billing_type (subscription / pay_per_use), credential secret ref, quota_source, reserve_pct, warn_pct, pause_pct, caps (daily/monthly USD), enabled |
 | **Harness** | key (claude-code, jules, opencode, direct), runtime (actions / api / in-process), compatible providers, capabilities (agentic, skills, subagents) |
 | **Model** | id, provider, price in/out, context, metadata, last_scouted |
@@ -158,13 +162,13 @@ Missing or stale quota reading ⇒ treat as **unknown**: warn in UI, prefer next
 
 ## 6. Ports (contracts) and adapters
 
-Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfaces; OpenAPI generated for the API). **Each port has a contract test suite every adapter must pass**, plus an in-memory fake for tests.
+Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfaces; OpenAPI generated for the API). **Every port has an in-memory fake and a shared contract test suite that every adapter, including the fake, must pass** (ADR-0012 rejected a narrower scope; see ADR-0023). A port's fake and suite land in the slice that first uses or adapts that port — before its first real adapter.
 
 | Port | Domain concepts | v1.x adapters | Later |
 |---|---|---|---|
 | `WorkTracker` | Ticket, Stage, Field, Comment, Child, Dependency | **Native (Firestore)** | GitHub Issues, Linear (mirror/export) |
 | `CodeHost` | Repo, PullRequest, CheckRun, Merge | GitHub App (REST + webhooks) | — |
-| `Executor` | RunRequest, RunStatus, RunResult, Artifact links | **Claude Code via Actions**, **Jules REST API**, **OpenCode via Actions** | Cloud Run Jobs, Agent SDK, Replicas |
+| `Executor` | RunRequest, RunStatus, RunResult, CompletionSignal, Artifact links | **Claude Code via Actions**, **Jules REST API**, **OpenCode via Actions** | Cloud Run Jobs, Agent SDK, Replicas |
 | `ModelGateway` | Completion, Usage, Cost | OpenRouter (direct single-call steps) | LiteLLM, direct providers |
 | `QuotaSource` | QuotaReading | Claude statusline/`rate_limits` capture from runs, Jules task counter | Official APIs when available |
 | `Notifier` | Notice, Urgency | UI (banner + Needs-you inbox) | Email, Slack, push |
@@ -182,17 +186,23 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 - **API** — REST, OpenAPI-documented, the single entry point for UI and MCP.
 - **MCP server** — remote, Streamable HTTP at `/mcp`. Tools generated from API contracts. v1.x tools: `list_projects`, `create_ticket`, `get_ticket`, `refine` (start refinement), `list_needs_me`, `answer_question`, `set_override`, `start`, `status`, `quota`, `promote_release`, `get_config`, `propose_config_change`.
 - **Webhook receiver** — GitHub App webhooks for PRs, check runs, and workflow runs (HMAC-verified, idempotent by delivery ID).
-- **Run watchdog** — when a run is dispatched, a Cloud Tasks task is queued for its timeout; if the run hasn't called back by then, the watchdog checks the executor/PR directly and heals or flags Needs-you. No periodic polling; nothing runs when no work is in flight.
+- **Run completion signals** (event-driven, per executor):
+  | Executor | Primary signal | Backup |
+  |---|---|---|
+  | Claude Code / OpenCode (Actions) | API callback from the workflow (§9 agent callback auth) | `workflow_run` completed webhook |
+  | Jules | `pull_request` opened webhook on the PR Jules creates (correlated to the Run by branch/PR body) | Watchdog reads session `activities` once at deadline |
+  | Direct | In-process; no signal needed | — |
+- **Run watchdog** — when a run is dispatched, a Cloud Tasks task is queued for its deadline. If no completion signal has arrived by then, the watchdog checks the executor/PR directly **once**, then heals the record or flags Needs-you. No periodic polling; nothing runs when no work is in flight.
 - **Pipeline engine** — stage transitions, DoR checks, gate rules, dependency release, retry policy.
 - **Router** — picks the route for a step: overrides → tier routes in order → skip providers paused by quota/budget → fall back or queue.
 - **Scheduled jobs** (Cloud Scheduler → authenticated endpoint): weekly **model scout** only. Quota readings are captured from run results, not sampled.
 - **UI** — static SPA served by the same service.
 
 ### 7.2 Executors
-- **Claude Code**: reusable GitHub Actions workflow using `anthropics/claude-code-action` with `CLAUDE_CODE_OAUTH_TOKEN`; dispatched via `workflow_dispatch` with run ID; reports back via API callback. Uses the platform skills plugin and subagents.
-- **Ticket context for agents** (all executors): the dispatch request carries the ticket snapshot (title, body, acceptance criteria, assumptions, answered questions). Agents that need more call the API/MCP with a short-lived, per-run token scoped to that ticket's project (read, plus comment/question/report on their own ticket).
-- **OpenCode**: reusable Actions workflow running OpenCode with a per-project OpenRouter key; default harness for non-Claude models.
-- **Jules**: REST API (`sessions`, `activities`, `approvePlan`, `sendMessage`); poll activities incrementally.
+- **Claude Code**: reusable GitHub Actions workflow using `anthropics/claude-code-action` with `CLAUDE_CODE_OAUTH_TOKEN`; dispatched via `workflow_dispatch` with the run ID (non-secret) as input; reports back via an API callback authenticated with the workflow's GitHub OIDC token. Uses the platform skills plugin and subagents.
+- **Ticket context for agents** (all executors): the dispatch request carries the ticket snapshot (title, body, acceptance criteria, assumptions, answered questions). In M1 that snapshot plus the callback (report/comment/question on its own ticket) is all an agent gets. From M4, agents that need more call the API/MCP read-only, scoped to that ticket's project, authenticated the same way (OIDC for Actions runs; a per-run token minted at dispatch for non-Actions executors).
+- **OpenCode**: reusable Actions workflow running OpenCode with a per-project OpenRouter key; default harness for non-Claude models. Same callback auth as Claude Code.
+- **Jules**: REST API (`sessions`, `activities`, `approvePlan`, `sendMessage`), configured to open a PR on completion. Completion is detected via the PR webhook (§7.1); `activities` are read on demand (watchdog, run detail view), not polled.
 - **Direct**: in-process OpenRouter calls for single-call steps (sizing, question drafting where non-agentic, digests, scout analysis).
 
 ### 7.3 Skills (platform plugin, versioned)
@@ -211,8 +221,8 @@ v1.x screens:
 - **Needs-you inbox** (questions, gate reviews, pending config changes, quota warnings) — home screen.
 - **Quota & spend** (per provider gauges with reset times; paid spend vs caps; persistent banner on warn/pause).
 - **Projects** (list, config, policy overrides).
-- **Story board** (board by stage with drag-and-drop, list view, epic grouping, ticket detail with history, linked runs/PRs/models/cost, overrides editing).
-- **Run detail** (metadata, cost, outcome, links out to Action log / Jules session / PR).
+- **Tickets** — M1: list view grouped by stage, ticket detail with history and linked runs/PRs/cost, create/edit. M4: drag-and-drop story board (dnd-kit), epic grouping, overrides editing.
+- **Run detail** — M1: run summary inside ticket detail. M4: dedicated screen (metadata, cost, outcome, links out to Action log / Jules session / PR).
 - **Config** (providers, harnesses, models, tiers, policies; audit log with revert; pending approvals).
 - **Releases** (dev status, promote to prod, rollback).
 API client generated from OpenAPI.
@@ -230,7 +240,6 @@ docs/architecture/adr/NNNN-*.md   # MADR, immutable
 docs/agent/*.md                   # shared procedures: size-rubric, build, review, escalation, security
 specs/NNN-name/{design.md, tech-design.md, tasks.md, stories/*.md, mockups/}
 .github/workflows/                # thin callers → platform reusable workflows; CI checks
-.github/ISSUE_TEMPLATE/           # issue forms (intent required; size/agent/tier/gate default "auto")
 CODEOWNERS                        # always-gated paths
 infra/                            # Terraform: dev/prod Cloud Run, Cloud Deploy pipeline, read-only agent SAs
 ```
@@ -242,10 +251,15 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 
 ## 9. Security
 
-- **Identity:** Google identity everywhere with an email allow-list (Andy only). UI via Firebase Auth (Google provider); MCP via OAuth delegated to Google sign-in. Webhooks via HMAC. Scheduler via OIDC tokens.
-- **Least privilege:** agent service accounts and tokens are read-only; per-run GitHub App installation tokens scoped to the project's repos; separate per-project OpenRouter keys with caps; per-project GCP projects.
+- **Identity:**
+  - Andy: Google identity with an email allow-list (Andy only). UI via Firebase Auth (Google provider); MCP via OAuth delegated to Google sign-in.
+  - GitHub webhooks: HMAC signature.
+  - Cloud Scheduler **and Cloud Tasks** (watchdog) → API: OIDC tokens for a dedicated invoker service account, audience = the service URL; the API verifies issuer, audience, and SA email.
+  - **Agent callbacks from Actions runs:** the workflow requests a GitHub Actions OIDC token (`id-token: write`, audience = control plane). The API verifies it against GitHub's JWKS and checks `repository`, `job_workflow_ref` (must be the platform's reusable workflow), and `run_id` against the dispatched Run. No secret is passed through `workflow_dispatch` inputs (they are visible in public repos' run UI).
+  - Non-Actions executors (Jules) don't call back; their completion arrives via GitHub webhooks.
+- **Least privilege:** agent service accounts and tokens are read-only; per-run GitHub App installation tokens scoped to the project's repos; separate per-project OpenRouter keys with caps; per-project GCP projects. Callback-authenticated agents can only write to their own Run and ticket (report, comment, question).
 - **Writes:** code via PR; infra via Terraform PR with plan in CI; prod via Cloud Deploy approval. The control plane never applies infra without Andy's approval.
-- **Secrets:** Secret Manager only; never in repo, logs, prompts, or run records.
+- **Secrets:** Secret Manager only; never in repo, logs, prompts, run records, or workflow inputs.
 - **Prompt injection:** all agents instructed that tool output, issue text, web content, and logs are data. MCP scoping per project for agents. (Later: promptfoo red-team suite against MCP + agents.)
 - **Audit:** TicketEvent and ConfigChange tables; run records; GitHub history for code.
 - **Public repos:** no secrets, personal data, tfvars, or state in any repo; secret scanning + push protection + TruffleHog in CI (ADR-0015).
@@ -255,7 +269,7 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 ## 10. Observability and cost
 
 - OTel traces/logs → Cloud Trace / Cloud Logging.
-- Run records (tokens, cost, outcome, quota snapshot) in Firestore drive the UI.
+- Run records (tokens, cost, outcome, quota snapshot) in Firestore drive the UI; rollups via aggregation queries (§5).
 - Paid cost from OpenRouter usage; subscription runs record **API-equivalent cost estimates** (labelled as estimates) alongside quota %.
 - Transcripts are not stored; run detail links to the Action log / Jules session / PR.
 - **Backups:** Firestore is the only copy of tickets, so daily Firestore scheduled backups (short retention; pennies at this size) ship in M1. Optional BigQuery export for ad-hoc analytics later.
@@ -270,10 +284,10 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 | API | Node HTTP framework with Zod-based OpenAPI generation (builder to propose; e.g., Hono + zod-openapi) |
 | MCP | Official MCP TypeScript SDK, Streamable HTTP, OAuth |
 | DB | Firestore (Native mode, default database, us-central1; free tier) with Zod-validated converters; no migrations (ADR-0017) |
-| UI | React, Vite, shadcn/ui, Tailwind, TanStack Router/Query/Table, dnd-kit (story board), shadcn charts; OpenAPI-generated client |
+| UI | React, Vite, shadcn/ui, Tailwind, TanStack Router/Query/Table, dnd-kit (story board, M4), shadcn charts; OpenAPI-generated client |
 | Runtime | Cloud Run (single service), Cloud Tasks, Cloud Scheduler (weekly scout), Secret Manager |
-| Auth | Firebase Auth / Identity Platform (Google) + MCP OAuth facade |
-| Work tracker | Native in Firestore + in-app story board + MCP (ADR-0016) |
+| Auth | Firebase Auth / Identity Platform (Google) + MCP OAuth facade; GitHub Actions OIDC for agent callbacks |
+| Work tracker | Native in Firestore + in-app UI + MCP (ADR-0016) |
 | Code host | GitHub App on Andy's personal account; public repos (ADR-0003, ADR-0015) |
 | Executors | GitHub Actions (Claude Code, OpenCode), Jules REST API, OpenRouter |
 | Release | Cloud Deploy (per project) |
@@ -287,25 +301,50 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 
 Each milestone must work **end to end** before the next starts. Acceptance criteria are verified by Andy.
 
+### How milestones are built: slices
+Each milestone is delivered as **slices**. A slice:
+- is one PR (or a short stack), independently reviewable and mergeable to `main`;
+- has its own **Done when** that Andy can check in a few minutes;
+- is sized so one agent session can finish it (S ≈ hours, M ≈ a session, L = split it);
+- declares its dependencies, so independent slices can run in parallel sessions/worktrees.
+
+`docs/build-log.md` tracks slice status (todo / in progress / PR open / merged) until the system can track its own work. The milestone's **Done when** is checked only after all its slices merge.
+
 ### M0 — Foundations
 Repo scaffold, contracts package, Terraform for control-plane GCP project (plan reviewed by Andy), Firestore database (server-only access), auth (UI + API allow-list), CI, ADRs for decisions in this doc.
 **Done when:** Andy can sign in to an empty UI on Cloud Run; unauthorized users are rejected; `terraform plan` is clean.
 
 ### M1 — Vertical slice (Claude only, one project)
-Native tickets + story board (stages, drag-and-drop, ticket detail with history); GitHub App (PR/check webhooks, workflow dispatch) + run watchdog; project registration; refinement with structured questions; Needs-you inbox; nightly DB backup; Claude Code executor via Actions; PR with structured summary; all merges gated; run records with outcomes and would-auto-merge; remote MCP with core tools (`create_ticket`, `list_needs_me`, `answer_question`, `status`); quota capture for claude-sub with UI warnings.
-**Done when:** From Claude desktop, Andy creates a ticket → agent asks refinement questions → Andy answers via MCP → ticket reaches Ready → Claude builds → PR opens → Andy merges → run shows in UI with cost/quota.
+**Done when:** From Claude desktop, Andy creates a ticket → agent asks refinement questions → Andy answers via MCP → ticket reaches Ready → Claude builds → PR opens → Andy merges → run shows in the UI with cost/quota.
+
+**Explicitly not in M1:** drag-and-drop board, epics, dedicated run-detail screen, agent read access to API/MCP, auto-merge, routing beyond the single Claude route.
+
+| Slice | Scope | Size | Depends on | Done when |
+|---|---|---|---|---|
+| **M1.0 Docs sync** | Bring this revision into the repo; ADRs for: Jules completion via PR webhook (§7.1), agent callback auth via Actions OIDC (§9), rollups via aggregation (§5), M1 scope/slicing (§12), docs upkeep (§14), contract suites for every port (§6). Resolve ADR-0012 with Andy. | S | M0 | ADRs merged; ADR-0012 accepted or rejected |
+| **M1.1 MCP OAuth spike** | Timeboxed (≤1 session). Prove Claude desktop custom connector → `/mcp` with Google-delegated OAuth and the allow-list. Throwaway `ping` tool only. Resolves open question 9. | M | M0 | Andy adds the connector in Claude desktop and calls `ping`; non-allow-listed account rejected; ADR records the mechanism |
+| **M1.2 Ticket core** | Contracts (Project, Ticket, TicketEvent, Question, Run); domain stage machine + DoR (with tests); Firestore store + converters; REST endpoints; Terraform for daily Firestore backup + Cloud Tasks queue + invoker SA. | M | M0 | API tests pass; `terraform plan` reviewed/applied by Andy; tickets created via API appear in Firestore with events |
+| **M1.3 UI: tickets + inbox** | Ticket list grouped by stage, create/edit, detail with history, Needs-you inbox, answer question. | M | M1.2 | Andy creates a ticket, sees history, answers a seeded question in the UI |
+| **M1.4 MCP core tools** | `create_ticket`, `list_needs_me`, `answer_question`, `status` on the M1.1 auth. | S | M1.1, M1.2 | Same flows as M1.3 work from Claude desktop |
+| **M1.5 GitHub App + project registration** | `CodeHost` port + fake + contract suite; register the App (Andy creates it; builder provides manifest/instructions), webhook receiver (HMAC, idempotent by delivery ID), register one project and its repo. | M | M1.2 | A PR/check event on the registered repo lands as an idempotent record; replayed delivery is a no-op |
+| **M1.6 Claude Code executor** | Reusable workflow; `workflow_dispatch` from the App with run ID; OIDC-authenticated callback; Run records; Cloud Tasks watchdog at deadline; one automatic retry then Needs-you. Use a no-op "echo" step for testing. | L → split if it grows (6a dispatch+callback, 6b watchdog+retry) | M1.5 | An echo run dispatches, calls back, and completes; a killed run is caught by the watchdog and flagged |
+| **M1.7 Refinement** | `refine` step on the executor; questions written as structured records → inbox; answering re-runs DoR → Ready. | M | M1.3, M1.4, M1.6 | A new ticket gets 1–5 questions; answering via MCP moves it to Ready |
+| **M1.8 Build + gate** | Dispatcher picks Ready tickets; `build` step opens PR with structured summary and ticket key; all merges gated (Andy); `would_auto_merge` recorded; outcome set from merge/close webhook; cost estimate on the Run. | M | M1.7 | Ready ticket → PR → Andy merges → ticket advances; Run shows cost estimate and outcome |
+| **M1.9 Quota capture** | Timeboxed, best-effort. Capture claude-sub `rate_limits` from runs if available headless; otherwise readings stay **unknown** per policy. UI banner on warn/pause/unknown. | S | M1.6 | Gauge shows a reading or "unknown"; banner appears at thresholds (test with seeded readings) |
+
+Parallelizable after M1.2: M1.3, M1.4 (once M1.1 is done), and M1.5.
 
 ### M2 — Second executor + routing
-Jules adapter; freeze `Executor` contract (two adapters pass contract tests); harness/provider/model/tier config with compatibility rules; size-based routing; cross-model review; google-sub quota (task counting) and reserves.
+Jules adapter (completion via PR webhook); freeze `Executor` contract (two adapters pass contract tests); harness/provider/model/tier config with compatibility rules; size-based routing; cross-model review; google-sub quota (task counting) and reserves. Slice at milestone start.
 
 ### M3 — Paid tier
-OpenCode executor via Actions; OpenRouter direct-call gateway for single-call steps; global and per-project caps with hard stops; quota-aware route fallback with 20% reserves; weekly model scout producing pending tier changes; initial tier list seeded by scout.
+OpenCode executor via Actions; OpenRouter direct-call gateway for single-call steps; global and per-project caps with hard stops; quota-aware route fallback with 20% reserves; weekly model scout producing pending tier changes; initial tier list seeded by scout. Slice at milestone start.
 
 ### M4 — Second project + epics
-Second real project onboarded via template + bootstrap; scoped tokens per project; epics with child tickets and dependencies; just-in-time re-planning; config editing and audit/revert in UI and MCP; board and run detail screens.
+Second real project onboarded via template + bootstrap; agent read access to API/MCP scoped per project; epics with child tickets and dependencies; just-in-time re-planning; config editing and audit/revert in UI and MCP; drag-and-drop story board; dedicated run-detail screen. Slice at milestone start.
 
 ### M5 — Ship it
-Project template Terraform + Cloud Deploy dev→prod; dev deploy + verification (Playwright/API tests + verification agent); promote/rollback from UI and MCP; release notes; rule-based auto-merge for S tasks.
+Project template Terraform + Cloud Deploy dev→prod; dev deploy + verification (Playwright/API tests + verification agent); promote/rollback from UI and MCP; release notes; rule-based auto-merge for S tasks. Slice at milestone start.
 
 ### Later (explicitly deferred)
 Prod monitoring agent and alert→ticket flow; write-approval execution; model-based risk scoring; email/Slack digests; transcript storage; BigQuery analytics; promptfoo CI + red-team; Cloud Run Jobs executors; additional harnesses (Antigravity CLI, Codex).
@@ -316,6 +355,8 @@ Prod monitoring agent and alert→ticket flow; write-approval execution; model-b
 
 Resolved in M0: GitHub home (personal account, public repos — ADR-0003); GCP project `andy-intelligence-512400` in `us-central1` (ADR-0007); Firestore (ADR-0017); default run.app URL (ADR-0007); work tracking native (ADR-0016).
 
+Resolved in M1.0 (ADR-0018 – ADR-0023): Jules completion detection (PR webhook + deadline watchdog); agent callback auth (GitHub Actions OIDC); rollups (aggregation queries); M1 scope cuts and slicing; docs upkeep; contract suites for every port (ADR-0012 rejected).
+
 Remaining:
 
 2. Naming convention for per-project dev/prod GCP projects (M5).
@@ -323,5 +364,26 @@ Remaining:
 6. Google plan (AI Pro vs Ultra) and current Jules daily task quota.
 7. OpenRouter: account exists? initial monthly/daily caps?
 8. First real side project to onboard in M1 (and is andy-intelligence itself project #2 for dogfooding?).
-9. Claude custom-connector OAuth mechanism currently supported (dynamic client registration vs static client) — determines MCP auth wiring.
-10. Whether the Jules GitHub integration or the Jules REST API should be the dispatch path (REST preferred for run tracking).
+9. Claude custom-connector OAuth mechanism currently supported (dynamic client registration vs static client) — **answered by slice M1.1**.
+10. Whether the Jules GitHub integration or the Jules REST API should be the dispatch path (REST preferred for run tracking; must support auto-PR creation for the completion signal).
+
+---
+
+## 14. Documentation
+
+Docs are part of the change, not a follow-up. Every slice PR updates the docs its change affects; the reviewer (Andy, or the review gate for managed projects) treats a stale doc like a failing test.
+
+| Doc | Owns | Update when |
+|---|---|---|
+| `README.md` | What the repo is, how to develop/run/test, layout table, links to the docs below | Commands, env vars, packages/apps, or layout change |
+| `docs/architecture/ARCHITECTURE.md` | Current target design and milestone/slice plan (this doc) | Design, scope, or plan changes. Bump `revision` and `last_updated` in the front matter. Never let it describe something the code contradicts. |
+| `docs/architecture/adr/NNNN-*.md` | Why a decision was made (MADR) | Any architecture decision or deviation. ADR bodies are immutable; to change a decision write a new ADR and update the old one's `status` (`superseded by` / `amended by`). |
+| `docs/build-log.md` | Slice status, pending decisions, blockers | Every slice: start, PR open, merged. Retired once the system tracks its own work. |
+| `docs/runbooks/*.md` | Steps Andy runs by hand (setup, secrets, apply, release) | Any manual step is added, changed, or removed |
+| `docs/BUILD-PROMPT.md` | How a building agent behaves | Operating rules change |
+| `AGENTS.md` (`CLAUDE.md` → symlink) | Short, always-loaded rules for agents working in the repo | Rules or doc map change |
+| Package/app `README.md` | Only when a package has setup or usage the root README can't cover in a line | That package's usage changes |
+
+Managed projects get the same rule through the template (§8): `docs/features.md` is updated on merge, `docs/architecture/overview.md` when the design changes, ADRs for decisions.
+
+The claude.ai Project holds reference copies of `ARCHITECTURE.md` and `BUILD-PROMPT.md` for planning conversations. **The repo is canonical**; refresh the Project copies when the architecture `revision` changes.
