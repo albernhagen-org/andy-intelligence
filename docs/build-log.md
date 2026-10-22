@@ -21,6 +21,8 @@ Temporary progress log until andy-intelligence can track its own work (then migr
 
 **Decided (Andy, later 2026-10-21):** repo is public (ADR-0015: secret hygiene, TruffleHog + GitHub push protection); CI plans / local applies and public service with app-level auth confirmed (ADR-0010, 0011). Neon reconfirmed after checking Cloud SQL has no free tier (~$10/mo minimum).
 
+**Decided (Andy, 2026-10-21 evening):** repo transferred to personal account `albernhagen/andy-intelligence` (ADR-0003). Work tracking moves into the app: Postgres tickets + in-app story board + MCP; GitHub only for code (ADR-0016, supersedes 0004). ARCHITECTURE.md updated (§1–4, 5, 6, 7, 8, 9, 10, 11, 12, 13). DB schema and contracts updated before any migration was applied (tickets as system of record, `ticket_events`, `ticket_dependencies`, project ticket keys). Stay on Neon (Supabase free tier pauses after a week idle and duplicates Firebase/GCP features).
+
 **Pending decisions (Andy):**
 
 - ADR-0012 (proposed): contract suites only for WorkTracker/Executor/QuotaSource.
@@ -28,5 +30,7 @@ Temporary progress log until andy-intelligence can track its own work (then migr
 
 **Blocked on Andy:**
 
-- Claude GitHub App install on the org (push access).
-- Runbook steps 0–4.
+- Open the M0 PR (this session can push via the old org URL redirect but can't create PRs).
+- Runbook steps 0–5.
+
+**Session note:** future sessions should use `albernhagen/andy-intelligence` as the source repo.

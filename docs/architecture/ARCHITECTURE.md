@@ -17,7 +17,7 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ### Goals (v1.x)
 1. **Ideate with system context.** Design new features with knowledge of the current architecture and shipped features; outputs become markdown in the project repo.
-2. **Ticketing from anywhere.** Create and refine work in the UI, on the GitHub Projects board, or conversationally from any MCP-capable AI tool (Claude desktop first).
+2. **Ticketing from anywhere.** Create and refine work in the UI's story board or conversationally from any MCP-capable AI tool (Claude desktop first).
 3. **Mandatory refinement.** Every story gets a refinement pass in which agents ask Andy targeted questions before work starts.
 4. **Autonomous end-to-end by default**, with overrides at global → project → epic → ticket level.
 5. **Cost and quota control.** Visibility into subscription usage and pay-per-use spend; reserves on subscriptions (Andy uses them outside this system); hard caps on paid spend; warnings in the UI.
@@ -39,8 +39,8 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ## 2. Core principles
 
-1. **LLMs decide; deterministic systems hold state.** Agents refine, split, size, design, implement, review. State lives in GitHub (work) and Postgres (config, runs, questions). The control plane is a stateless reconciler.
-2. **GitHub is the system of record for work; Postgres is the system of record for configuration, runs, questions, and spend.**
+1. **LLMs decide; deterministic systems hold state.** Agents refine, split, size, design, implement, review. State lives in Postgres; the control-plane service itself is stateless.
+2. **Postgres is the system of record for work (tickets, questions, history), configuration, runs, and spend. GitHub is the system of record for code** (repos, PRs, CI, Actions as the agent runtime). Every ticket links to its runs, PRs, models, and costs in one place (ADR-0016).
 3. **Read freely, write with approval.** Agents hold read-only credentials everywhere. Code changes arrive as PRs. Infrastructure changes arrive as Terraform PRs. Prod changes require Andy.
 4. **Contract-first, adapters behind ports.** Vendor concepts never leak into the domain.
 5. **Ask, don't assume.** Agents (including the agents building this system) escalate ambiguity as structured questions rather than guessing on anything consequential.
@@ -54,16 +54,16 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 ```
  Interfaces                         Control plane (one Cloud Run service)              Executors
  ┌───────────────────────┐   ┌───────────────────────────────────────────────┐   ┌────────────────────────────┐
- │ Web UI (React/shadcn) │──▶│ REST API (OpenAPI)                             │   │ GitHub Actions:            │
+ │ Web UI + story board  │──▶│ REST API (OpenAPI)                             │   │ GitHub Actions:            │
  │ Claude desktop (MCP)  │──▶│ Remote MCP endpoint (/mcp)                     │──▶│  • Claude Code (claude-sub)│
- │ GitHub Projects board │◀─▶│ GitHub App webhook receiver + reconciler       │   │  • OpenCode (openrouter)   │
+ │ GitHub (PRs, checks)  │──▶│ GitHub App webhook receiver + reconciler       │   │  • OpenCode (openrouter)   │
  └───────────────────────┘   │ Pipeline engine (stages, DoR, gates)           │──▶│ Jules REST API (google-sub)│
                              │ Router (tiers × quota × budgets × overrides)   │──▶│ Direct OpenRouter calls    │
                              │ Questions / Needs-you                          │   │  (single-call steps)       │
  Cloud Scheduler ───────────▶│ Jobs: reconcile, model scout, quota sampling   │   └────────────────────────────┘
                              └───────────────┬───────────────────────────────┘
                                              │
-                Postgres (config, runs, questions, audit)   Secret Manager   Cloud Logging/Trace (OTel)
+                Postgres (tickets, config, runs, questions, audit)   Secret Manager   Cloud Logging/Trace (OTel)
 
  Per project (generated from template): repo + AGENTS.md/docs/specs + CI + Cloud Deploy (dev → prod) + GCP dev/prod projects
 ```
@@ -72,11 +72,11 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ## 4. Workflow
 
-### 4.1 Stages (GitHub Projects "Status" field)
+### 4.1 Stages (`ticket.stage`, shown as columns on the in-app story board)
 
 | Stage | What happens | Exit criteria (automatic unless overridden) |
 |---|---|---|
-| **Backlog** | Refinement agent enriches; splits epics into stories (sub-issues with dependencies); sizes; assigns tier; **asks Andy questions** | **Definition of Ready (DoR)** met |
+| **Backlog** | Refinement agent enriches; splits epics into stories (child tickets with dependencies); sizes; assigns tier; **asks Andy questions** | **Definition of Ready (DoR)** met |
 | **Ready** | Waits for dependencies, agent assignee, quota/budget availability | Dispatcher starts a run |
 | **In progress** | Executor runs (per tier route). One automatic retry, then flags Needs-you | PR opened with structured run summary |
 | **Ready for review** | Rule-based gate decides auto-merge vs. Andy | Merged |
@@ -88,7 +88,7 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 ### 4.2 Definition of Ready (story)
 - Problem/intent stated; acceptance criteria in **EARS** form ("WHEN … THE SYSTEM SHALL …").
 - Size tagged S/M/L with one-line justification (rubric in `docs/agent/size-rubric.md`).
-- Dependencies declared (sub-issue "blocked by").
+- Dependencies declared (ticket "blocked by" links).
 - Tier assigned (default from policy, or override).
 - **No open questions.** Assumptions listed explicitly.
 - Per-project policy may allow "proceed on documented assumptions" for S tasks only; default is **require Andy's answers**.
@@ -96,11 +96,11 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 ### 4.3 Refinement and questions
 - Every story receives a refinement pass: the agent drafts the story, lists assumptions, and asks **1–5 targeted questions** (highest-impact ambiguities first; multiple choice with a suggested default where possible).
 - Questions are **structured records** (ticket, text, options, suggested answer, urgency, status, answer, answered_via).
-- Andy answers from the UI, the board (comment), or MCP. A `/refine` skill in Claude desktop pulls all pending questions across projects for a batched conversational session and writes answers back.
+- Andy answers from the UI or MCP. A `/refine` skill in Claude desktop pulls all pending questions across projects for a batched conversational session and writes answers back.
 - Answering re-triggers the DoR check.
 
 ### 4.4 Epics
-- GitHub issue types (Epic / Story / Task / Bug) + **sub-issues**.
+- Ticket types (Epic / Story / Task / Bug) + **child tickets** (`parent_id`).
 - Epic refinement produces stories with `depends_on`. Stories are vertical slices, independently mergeable behind feature flags; merge to `main`, no long-lived epic branches.
 - **Just-in-time re-planning:** when a story unblocks, a short plan pass re-reads the current codebase before execution.
 - Epic status, cost, and progress roll up from children. Overrides on an epic cascade to its stories.
@@ -127,7 +127,9 @@ All records carry `project_id` where applicable.
 | Entity | Key fields |
 |---|---|
 | **Project** | name, repos, GitHub board ref, GCP dev/prod project IDs, policy overrides, budget allocation, autonomy level, enabled |
-| **Ticket** (mirror of GitHub item) | external refs, type (epic/story/task/bug), parent, stage, size, tier, overrides (assignee agent/me, tier, model pin, autonomy, target env), needs_you, DoR status |
+| **Ticket** (system of record) | key (e.g. `AI-42`), title, body, acceptance criteria (EARS), assumptions, type (epic/story/task/bug), parent, stage, size, tier, overrides (assignee agent/me, tier, model pin, autonomy, target env), needs_you, DoR status, rank |
+| **TicketDependency** | ticket, blocked_by ticket |
+| **TicketEvent** | ticket, kind (comment / stage_change / field_change / run_linked / pr_linked …), actor (andy / agent:<run> / system), body/diff, timestamp — the ticket's full history |
 | **Question** | ticket, text, options, suggested_answer, assumptions, urgency, status, answer, answered_via, timestamps |
 | **Run** | ticket, step (refine/plan/build/review/verify/scout), harness, provider, model, tier, status, started/ended, tokens, cost_usd (actual or API-equivalent estimate), quota snapshot, links (Action run, Jules session, PR), **outcome** (merged_clean / reworked / reverted / failed), would_auto_merge |
 | **Provider** | key (claude-sub, google-sub, openrouter), billing_type (subscription / pay_per_use), credential secret ref, quota_source, reserve_pct, warn_pct, pause_pct, caps (daily/monthly USD), enabled |
@@ -161,7 +163,8 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 
 | Port | Domain concepts | v1.x adapters | Later |
 |---|---|---|---|
-| `WorkTracker` | Ticket, Stage, Field, Comment, SubIssue, Dependency | GitHub App (Issues + Projects v2 GraphQL) | Linear, native |
+| `WorkTracker` | Ticket, Stage, Field, Comment, Child, Dependency | **Native (Postgres)** | GitHub Issues, Linear (mirror/export) |
+| `CodeHost` | Repo, PullRequest, CheckRun, Merge | GitHub App (REST + webhooks) | — |
 | `Executor` | RunRequest, RunStatus, RunResult, Artifact links | **Claude Code via Actions**, **Jules REST API**, **OpenCode via Actions** | Cloud Run Jobs, Agent SDK, Replicas |
 | `ModelGateway` | Completion, Usage, Cost | OpenRouter (direct single-call steps) | LiteLLM, direct providers |
 | `QuotaSource` | QuotaReading | Claude statusline/`rate_limits` capture from runs, Jules task counter | Official APIs when available |
@@ -179,8 +182,8 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 ### 7.1 Control plane service (Cloud Run)
 - **API** — REST, OpenAPI-documented, the single entry point for UI and MCP.
 - **MCP server** — remote, Streamable HTTP at `/mcp`. Tools generated from API contracts. v1.x tools: `list_projects`, `create_ticket`, `get_ticket`, `refine` (start refinement), `list_needs_me`, `answer_question`, `set_override`, `start`, `status`, `quota`, `promote_release`, `get_config`, `propose_config_change`.
-- **Webhook receiver** — GitHub App webhooks (HMAC-verified, idempotent by delivery ID).
-- **Reconciler** — every 10–15 min compares GitHub state with Postgres and dispatch state; heals drift from missed webhooks.
+- **Webhook receiver** — GitHub App webhooks for PRs, check runs, and workflow runs (HMAC-verified, idempotent by delivery ID).
+- **Reconciler** — periodically compares in-flight runs and open PRs with Postgres; heals drift from missed webhooks or callbacks. Runs only when work is in flight, so the database can scale to zero.
 - **Pipeline engine** — stage transitions, DoR checks, gate rules, dependency release, retry policy.
 - **Router** — picks the route for a step: overrides → tier routes in order → skip providers paused by quota/budget → fall back or queue.
 - **Scheduled jobs** (Cloud Scheduler → authenticated endpoints): reconcile, weekly **model scout**, quota sampling.
@@ -188,6 +191,7 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 
 ### 7.2 Executors
 - **Claude Code**: reusable GitHub Actions workflow using `anthropics/claude-code-action` with `CLAUDE_CODE_OAUTH_TOKEN`; dispatched via `workflow_dispatch` with run ID; reports back via API callback. Uses the platform skills plugin and subagents.
+- **Ticket context for agents** (all executors): the dispatch request carries the ticket snapshot (title, body, acceptance criteria, assumptions, answered questions). Agents that need more call the API/MCP with a short-lived, per-run token scoped to that ticket's project (read, plus comment/question/report on their own ticket).
 - **OpenCode**: reusable Actions workflow running OpenCode with a per-project OpenRouter key; default harness for non-Claude models.
 - **Jules**: REST API (`sessions`, `activities`, `approvePlan`, `sendMessage`); poll activities incrementally.
 - **Direct**: in-process OpenRouter calls for single-call steps (sizing, question drafting where non-agentic, digests, scout analysis).
@@ -208,7 +212,7 @@ v1.x screens:
 - **Needs-you inbox** (questions, gate reviews, pending config changes, quota warnings) — home screen.
 - **Quota & spend** (per provider gauges with reset times; paid spend vs caps; persistent banner on warn/pause).
 - **Projects** (list, config, policy overrides).
-- **Tickets** (list/board by stage, epic grouping, overrides editing).
+- **Story board** (board by stage with drag-and-drop, list view, epic grouping, ticket detail with history, linked runs/PRs/models/cost, overrides editing).
 - **Run detail** (metadata, cost, outcome, links out to Action log / Jules session / PR).
 - **Config** (providers, harnesses, models, tiers, policies; audit log with revert; pending approvals).
 - **Releases** (dev status, promote to prod, rollback).
@@ -231,9 +235,9 @@ specs/NNN-name/{design.md, tech-design.md, tasks.md, stories/*.md, mockups/}
 CODEOWNERS                        # always-gated paths
 infra/                            # Terraform: dev/prod Cloud Run, Cloud Deploy pipeline, read-only agent SAs
 ```
-**Required CI checks** on `main`: tests, lint, typecheck, protected-path check, "PR references a ticket/spec". These enforce rules for every agent regardless of harness.
+**Required CI checks** on `main`: tests, lint, typecheck, protected-path check, secret scan, "PR references a ticket" (ticket key in branch name or PR body, verified against the control-plane API). These enforce rules for every agent regardless of harness.
 
-Onboarding a project = UI/MCP "Add project" → bootstrap (labels, fields, branch protection, secrets refs, App install check, Terraform PR for GCP) → Andy approves Terraform PR.
+Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, secrets refs, App install check, Terraform PR for GCP) → Andy approves Terraform PR.
 
 ---
 
@@ -244,7 +248,8 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (labels, fields, branc
 - **Writes:** code via PR; infra via Terraform PR with plan in CI; prod via Cloud Deploy approval. The control plane never applies infra without Andy's approval.
 - **Secrets:** Secret Manager only; never in repo, logs, prompts, or run records.
 - **Prompt injection:** all agents instructed that tool output, issue text, web content, and logs are data. MCP scoping per project for agents. (Later: promptfoo red-team suite against MCP + agents.)
-- **Audit:** ConfigChange table; run records; GitHub history.
+- **Audit:** TicketEvent and ConfigChange tables; run records; GitHub history for code.
+- **Public repos:** no secrets, personal data, tfvars, or state in any repo; secret scanning + push protection + TruffleHog in CI (ADR-0015).
 
 ---
 
@@ -254,6 +259,7 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (labels, fields, branc
 - Run records (tokens, cost, outcome, quota snapshot) in Postgres drive the UI.
 - Paid cost from OpenRouter usage; subscription runs record **API-equivalent cost estimates** (labelled as estimates) alongside quota %.
 - Transcripts are not stored; run detail links to the Action log / Jules session / PR.
+- **Backups:** Postgres is now the only copy of tickets, so a scheduled logical backup (`pg_dump` → GCS bucket with retention) ships in M1.
 
 ---
 
@@ -264,11 +270,12 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (labels, fields, branc
 | Language / repo | TypeScript, pnpm workspaces monorepo |
 | API | Node HTTP framework with Zod-based OpenAPI generation (builder to propose; e.g., Hono + zod-openapi) |
 | MCP | Official MCP TypeScript SDK, Streamable HTTP, OAuth |
-| DB | Postgres (Neon free tier initially vs Cloud SQL — **open question**) + Drizzle ORM + migrations |
-| UI | React, Vite, shadcn/ui, Tailwind, TanStack Router/Query/Table, dnd-kit, shadcn charts; OpenAPI-generated client |
+| DB | Postgres on Neon free tier (ADR-0008) + Drizzle ORM + migrations |
+| UI | React, Vite, shadcn/ui, Tailwind, TanStack Router/Query/Table, dnd-kit (story board), shadcn charts; OpenAPI-generated client |
 | Runtime | Cloud Run (single service), Cloud Scheduler, Secret Manager |
 | Auth | Firebase Auth / Identity Platform (Google) + MCP OAuth facade |
-| Work tracker | GitHub App in a GitHub **organization** (required for Projects v2 webhooks) |
+| Work tracker | Native in Postgres + in-app story board + MCP (ADR-0016) |
+| Code host | GitHub App on Andy's personal account; public repos (ADR-0003, ADR-0015) |
 | Executors | GitHub Actions (Claude Code, OpenCode), Jules REST API, OpenRouter |
 | Release | Cloud Deploy (per project) |
 | IaC | Terraform |
@@ -286,7 +293,7 @@ Repo scaffold, contracts package, Terraform for control-plane GCP project (plan 
 **Done when:** Andy can sign in to an empty UI on Cloud Run; unauthorized users are rejected; `terraform plan` is clean.
 
 ### M1 — Vertical slice (Claude only, one project)
-GitHub App + webhooks + reconciler; project registration; ticket mirror; refinement with structured questions; Needs-you inbox; Claude Code executor via Actions; PR with structured summary; all merges gated; run records with outcomes and would-auto-merge; remote MCP with core tools (`create_ticket`, `list_needs_me`, `answer_question`, `status`); quota capture for claude-sub with UI warnings.
+Native tickets + story board (stages, drag-and-drop, ticket detail with history); GitHub App (PR/check webhooks, workflow dispatch) + reconciler; project registration; refinement with structured questions; Needs-you inbox; nightly DB backup; Claude Code executor via Actions; PR with structured summary; all merges gated; run records with outcomes and would-auto-merge; remote MCP with core tools (`create_ticket`, `list_needs_me`, `answer_question`, `status`); quota capture for claude-sub with UI warnings.
 **Done when:** From Claude desktop, Andy creates a ticket → agent asks refinement questions → Andy answers via MCP → ticket reaches Ready → Claude builds → PR opens → Andy merges → run shows in UI with cost/quota.
 
 ### M2 — Second executor + routing
@@ -296,7 +303,7 @@ Jules adapter; freeze `Executor` contract (two adapters pass contract tests); ha
 OpenCode executor via Actions; OpenRouter direct-call gateway for single-call steps; global and per-project caps with hard stops; quota-aware route fallback with 20% reserves; weekly model scout producing pending tier changes; initial tier list seeded by scout.
 
 ### M4 — Second project + epics
-Second real project onboarded via template + bootstrap; scoped tokens per project; epics with sub-issues and dependencies; just-in-time re-planning; config editing and audit/revert in UI and MCP; board and run detail screens.
+Second real project onboarded via template + bootstrap; scoped tokens per project; epics with child tickets and dependencies; just-in-time re-planning; config editing and audit/revert in UI and MCP; board and run detail screens.
 
 ### M5 — Ship it
 Project template Terraform + Cloud Deploy dev→prod; dev deploy + verification (Playwright/API tests + verification agent); promote/rollback from UI and MCP; release notes; rule-based auto-merge for S tasks.
@@ -306,12 +313,13 @@ Prod monitoring agent and alert→ticket flow; write-approval execution; model-b
 
 ---
 
-## 13. Open questions (to resolve with Andy before/during M0)
+## 13. Open questions
 
-1. GitHub organization name (new free org for side projects?).
-2. GCP: billing account, control-plane project ID, region (e.g., `us-central1` vs `us-west*`), naming convention for per-project dev/prod projects.
-3. Postgres: Neon free tier to start, or Cloud SQL from day one?
-4. Custom domain for the UI/MCP, or default Cloud Run URL?
+Resolved in M0: GitHub home (personal account, public repos — ADR-0003); GCP project `andy-intelligence-512400` in `us-central1` (ADR-0007); Neon (ADR-0008); default run.app URL (ADR-0007); work tracking native (ADR-0016).
+
+Remaining:
+
+2. Naming convention for per-project dev/prod GCP projects (M5).
 5. Claude plan (Pro vs Max) — affects automated-run budget; confirm current billing for Action/headless usage.
 6. Google plan (AI Pro vs Ultra) and current Jules daily task quota.
 7. OpenRouter: account exists? initial monthly/daily caps?

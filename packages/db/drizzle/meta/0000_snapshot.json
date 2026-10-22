@@ -1,5 +1,5 @@
 {
-  "id": "99209e9b-be28-4e25-b4cf-c2ee5852b873",
+  "id": "370f1c12-c0ac-43d7-b034-b7fd628bfba0",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -265,18 +265,25 @@
           "primaryKey": false,
           "notNull": true
         },
+        "key": {
+          "name": "key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "next_ticket_number": {
+          "name": "next_ticket_number",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
         "repos": {
           "name": "repos",
           "type": "jsonb",
           "primaryKey": false,
           "notNull": true,
           "default": "'[]'::jsonb"
-        },
-        "board_ref": {
-          "name": "board_ref",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         },
         "gcp_dev_project_id": {
           "name": "gcp_dev_project_id",
@@ -327,6 +334,13 @@
           "nullsNotDistinct": false,
           "columns": [
             "name"
+          ]
+        },
+        "projects_key_unique": {
+          "name": "projects_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "key"
           ]
         }
       },
@@ -912,6 +926,165 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.ticket_dependencies": {
+      "name": "ticket_dependencies",
+      "schema": "",
+      "columns": {
+        "ticket_id": {
+          "name": "ticket_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "blocked_by_id": {
+          "name": "blocked_by_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "ticket_dependencies_ticket_id_tickets_id_fk": {
+          "name": "ticket_dependencies_ticket_id_tickets_id_fk",
+          "tableFrom": "ticket_dependencies",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "ticket_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "ticket_dependencies_blocked_by_id_tickets_id_fk": {
+          "name": "ticket_dependencies_blocked_by_id_tickets_id_fk",
+          "tableFrom": "ticket_dependencies",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "blocked_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "ticket_dependencies_ticket_id_blocked_by_id_pk": {
+          "name": "ticket_dependencies_ticket_id_blocked_by_id_pk",
+          "columns": [
+            "ticket_id",
+            "blocked_by_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.ticket_events": {
+      "name": "ticket_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ticket_id": {
+          "name": "ticket_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "run_id": {
+          "name": "run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ticket_events_ticket_created_idx": {
+          "name": "ticket_events_ticket_created_idx",
+          "columns": [
+            {
+              "expression": "ticket_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ticket_events_ticket_id_tickets_id_fk": {
+          "name": "ticket_events_ticket_id_tickets_id_fk",
+          "tableFrom": "ticket_events",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "ticket_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.tickets": {
       "name": "tickets",
       "schema": "",
@@ -928,9 +1101,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "external_ref": {
-          "name": "external_ref",
-          "type": "text",
+        "number": {
+          "name": "number",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },
@@ -953,6 +1126,27 @@
           "primaryKey": false,
           "notNull": true
         },
+        "body": {
+          "name": "body",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "acceptance_criteria": {
+          "name": "acceptance_criteria",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
+        "assumptions": {
+          "name": "assumptions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'[]'::jsonb"
+        },
         "stage": {
           "name": "stage",
           "type": "stage",
@@ -960,6 +1154,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'backlog'"
+        },
+        "rank": {
+          "name": "rank",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         },
         "size": {
           "name": "size",
@@ -996,14 +1196,15 @@
           "notNull": true,
           "default": false
         },
-        "synced_at": {
-          "name": "synced_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -1011,11 +1212,17 @@
         }
       },
       "indexes": {
-        "tickets_external_ref_uq": {
-          "name": "tickets_external_ref_uq",
+        "tickets_project_number_uq": {
+          "name": "tickets_project_number_uq",
           "columns": [
             {
-              "expression": "external_ref",
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "number",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1026,8 +1233,8 @@
           "method": "btree",
           "with": {}
         },
-        "tickets_project_stage_idx": {
-          "name": "tickets_project_stage_idx",
+        "tickets_project_stage_rank_idx": {
+          "name": "tickets_project_stage_rank_idx",
           "columns": [
             {
               "expression": "project_id",
@@ -1037,6 +1244,27 @@
             },
             {
               "expression": "stage",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "rank",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "tickets_parent_idx": {
+          "name": "tickets_parent_idx",
+          "columns": [
+            {
+              "expression": "parent_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1055,6 +1283,19 @@
           "tableTo": "projects",
           "columnsFrom": [
             "project_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "tickets_parent_id_tickets_id_fk": {
+          "name": "tickets_parent_id_tickets_id_fk",
+          "tableFrom": "tickets",
+          "tableTo": "tickets",
+          "columnsFrom": [
+            "parent_id"
           ],
           "columnsTo": [
             "id"

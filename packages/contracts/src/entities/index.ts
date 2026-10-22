@@ -26,7 +26,8 @@ export const Project = z.object({
   id: Id,
   name: z.string().min(1),
   repos: z.array(z.string().min(1)),
-  boardRef: z.string().nullable(),
+  /** Ticket key prefix, e.g. "AI". */
+  key: z.string().regex(/^[A-Z][A-Z0-9]{0,9}$/),
   gcpDevProjectId: z.string().nullable(),
   gcpProdProjectId: z.string().nullable(),
   autonomy: AutonomyLevel,
@@ -46,24 +47,61 @@ export type TicketOverrides = z.infer<typeof TicketOverrides>;
 
 export const DorStatus = z.enum(["not_met", "met"]);
 
+/** e.g. "AI-42": project key + per-project number. */
+export const TicketKey = z.string().regex(/^[A-Z][A-Z0-9]{0,9}-\d+$/);
+export type TicketKey = z.infer<typeof TicketKey>;
+
+/** Postgres is the system of record for tickets (ADR-0016). */
 export const Ticket = z.object({
   id: Id,
   projectId: Id,
-  externalRef: z.string().min(1),
+  key: TicketKey,
   type: TicketType,
   parentId: Id.nullable(),
   title: z.string().min(1),
+  body: z.string(),
+  /** EARS form: "WHEN … THE SYSTEM SHALL …" */
+  acceptanceCriteria: z.array(z.string()),
+  assumptions: z.array(z.string()),
   stage: Stage,
+  rank: z.string().min(1),
   size: Size.nullable(),
   tier: TierKey.nullable(),
   overrides: TicketOverrides,
   needsYou: z.boolean(),
   dorStatus: DorStatus,
+  blockedBy: z.array(Id),
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
 });
 export type Ticket = z.infer<typeof Ticket>;
 
+export const TicketEventKind = z.enum([
+  "created",
+  "comment",
+  "stage_changed",
+  "fields_changed",
+  "question_asked",
+  "question_answered",
+  "run_linked",
+  "pr_linked",
+]);
+
+/** Append-only ticket history. actor: "andy" | "system" | "agent:<runId>". */
+export const TicketEvent = z.object({
+  id: Id,
+  ticketId: Id,
+  kind: TicketEventKind,
+  actor: z.string().regex(/^(andy|system|agent:.+)$/),
+  runId: Id.nullable(),
+  body: z.string().nullable(),
+  data: z.record(z.string(), z.unknown()),
+  createdAt: Timestamp,
+});
+export type TicketEvent = z.infer<typeof TicketEvent>;
+
 export const QuestionStatus = z.enum(["open", "answered", "withdrawn"]);
-export const AnsweredVia = z.enum(["ui", "board", "mcp"]);
+export const AnsweredVia = z.enum(["ui", "mcp"]);
 
 export const Question = z.object({
   id: Id,

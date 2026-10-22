@@ -49,15 +49,17 @@ CREATE TABLE "policies" (
 CREATE TABLE "projects" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
+	"key" text NOT NULL,
+	"next_ticket_number" integer DEFAULT 1 NOT NULL,
 	"repos" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"board_ref" text,
 	"gcp_dev_project_id" text,
 	"gcp_prod_project_id" text,
 	"autonomy" text DEFAULT 'gated' NOT NULL,
 	"monthly_budget_usd" double precision,
 	"enabled" boolean DEFAULT true NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "projects_name_unique" UNIQUE("name")
+	CONSTRAINT "projects_name_unique" UNIQUE("name"),
+	CONSTRAINT "projects_key_unique" UNIQUE("key")
 );
 --> statement-breakpoint
 CREATE TABLE "providers" (
@@ -133,21 +135,42 @@ CREATE TABLE "runs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "ticket_dependencies" (
+	"ticket_id" text NOT NULL,
+	"blocked_by_id" text NOT NULL,
+	CONSTRAINT "ticket_dependencies_ticket_id_blocked_by_id_pk" PRIMARY KEY("ticket_id","blocked_by_id")
+);
+--> statement-breakpoint
+CREATE TABLE "ticket_events" (
+	"id" text PRIMARY KEY NOT NULL,
+	"ticket_id" text NOT NULL,
+	"kind" text NOT NULL,
+	"actor" text NOT NULL,
+	"run_id" text,
+	"body" text,
+	"data" jsonb DEFAULT '{}'::jsonb NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "tickets" (
 	"id" text PRIMARY KEY NOT NULL,
 	"project_id" text NOT NULL,
-	"external_ref" text NOT NULL,
+	"number" integer NOT NULL,
 	"type" "ticket_type" NOT NULL,
 	"parent_id" text,
 	"title" text NOT NULL,
+	"body" text DEFAULT '' NOT NULL,
+	"acceptance_criteria" jsonb DEFAULT '[]'::jsonb NOT NULL,
+	"assumptions" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"stage" "stage" DEFAULT 'backlog' NOT NULL,
+	"rank" text NOT NULL,
 	"size" "size",
 	"tier" "tier_key",
 	"overrides" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"needs_you" boolean DEFAULT false NOT NULL,
 	"dor_met" boolean DEFAULT false NOT NULL,
-	"synced_at" timestamp with time zone,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "tiers" (
@@ -160,11 +183,17 @@ ALTER TABLE "questions" ADD CONSTRAINT "questions_ticket_id_tickets_id_fk" FOREI
 ALTER TABLE "releases" ADD CONSTRAINT "releases_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "runs" ADD CONSTRAINT "runs_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "runs" ADD CONSTRAINT "runs_ticket_id_tickets_id_fk" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ticket_dependencies" ADD CONSTRAINT "ticket_dependencies_ticket_id_tickets_id_fk" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ticket_dependencies" ADD CONSTRAINT "ticket_dependencies_blocked_by_id_tickets_id_fk" FOREIGN KEY ("blocked_by_id") REFERENCES "public"."tickets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ticket_events" ADD CONSTRAINT "ticket_events_ticket_id_tickets_id_fk" FOREIGN KEY ("ticket_id") REFERENCES "public"."tickets"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tickets" ADD CONSTRAINT "tickets_project_id_projects_id_fk" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "tickets" ADD CONSTRAINT "tickets_parent_id_tickets_id_fk" FOREIGN KEY ("parent_id") REFERENCES "public"."tickets"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "config_changes_status_idx" ON "config_changes" USING btree ("status");--> statement-breakpoint
 CREATE UNIQUE INDEX "policies_scope_uq" ON "policies" USING btree ("scope","scope_id");--> statement-breakpoint
 CREATE INDEX "questions_open_idx" ON "questions" USING btree ("status","project_id");--> statement-breakpoint
 CREATE INDEX "quota_latest_idx" ON "quota_readings" USING btree ("provider","window","taken_at");--> statement-breakpoint
 CREATE INDEX "runs_project_created_idx" ON "runs" USING btree ("project_id","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "tickets_external_ref_uq" ON "tickets" USING btree ("external_ref");--> statement-breakpoint
-CREATE INDEX "tickets_project_stage_idx" ON "tickets" USING btree ("project_id","stage");
+CREATE INDEX "ticket_events_ticket_created_idx" ON "ticket_events" USING btree ("ticket_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "tickets_project_number_uq" ON "tickets" USING btree ("project_id","number");--> statement-breakpoint
+CREATE INDEX "tickets_project_stage_rank_idx" ON "tickets" USING btree ("project_id","stage","rank");--> statement-breakpoint
+CREATE INDEX "tickets_parent_idx" ON "tickets" USING btree ("parent_id");

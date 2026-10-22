@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   doublePrecision,
   index,
@@ -6,6 +7,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
@@ -13,7 +15,7 @@ import {
 
 /**
  * Postgres schema for ARCHITECTURE §5. Enum values mirror @andy/contracts.
- * GitHub is authoritative for ticket content; `tickets` is a thin mirror (ADR-0004).
+ * Postgres is the system of record for tickets and their history (ADR-0016).
  */
 
 export const stage = pgEnum("stage", [
@@ -53,8 +55,10 @@ const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull(
 export const projects = pgTable("projects", {
   id: id(),
   name: text("name").notNull().unique(),
+  /** Ticket key prefix, e.g. "AI" → AI-42. */
+  key: text("key").notNull().unique(),
+  nextTicketNumber: integer("next_ticket_number").notNull().default(1),
   repos: jsonb("repos").$type<string[]>().notNull().default([]),
-  boardRef: text("board_ref"),
   gcpDevProjectId: text("gcp_dev_project_id"),
   gcpProdProjectId: text("gcp_prod_project_id"),
   autonomy: text("autonomy").notNull().default("gated"),
@@ -70,23 +74,61 @@ export const tickets = pgTable(
     projectId: text("project_id")
       .notNull()
       .references(() => projects.id),
-    externalRef: text("external_ref").notNull(),
+    number: integer("number").notNull(),
     type: ticketType("type").notNull(),
-    parentId: text("parent_id"),
+    parentId: text("parent_id").references((): AnyPgColumn => tickets.id),
     title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    acceptanceCriteria: jsonb("acceptance_criteria").$type<string[]>().notNull().default([]),
+    assumptions: jsonb("assumptions").$type<string[]>().notNull().default([]),
     stage: stage("stage").notNull().default("backlog"),
+    /** Fractional-index string for ordering within a stage column. */
+    rank: text("rank").notNull(),
     size: size("size"),
     tier: tierKey("tier"),
     overrides: jsonb("overrides").notNull().default({}),
     needsYou: boolean("needs_you").notNull().default(false),
     dorMet: boolean("dor_met").notNull().default(false),
-    syncedAt: timestamp("synced_at", { withTimezone: true }),
     createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("tickets_external_ref_uq").on(t.externalRef),
-    index("tickets_project_stage_idx").on(t.projectId, t.stage),
+    uniqueIndex("tickets_project_number_uq").on(t.projectId, t.number),
+    index("tickets_project_stage_rank_idx").on(t.projectId, t.stage, t.rank),
+    index("tickets_parent_idx").on(t.parentId),
   ],
+);
+
+export const ticketDependencies = pgTable(
+  "ticket_dependencies",
+  {
+    ticketId: text("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    blockedById: text("blocked_by_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+  },
+  (t) => [primaryKey({ columns: [t.ticketId, t.blockedById] })],
+);
+
+/** Append-only history: comments and every change, with who made it (ADR-0016). */
+export const ticketEvents = pgTable(
+  "ticket_events",
+  {
+    id: id(),
+    ticketId: text("ticket_id")
+      .notNull()
+      .references(() => tickets.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    /** "andy" | "system" | "agent:<runId>" */
+    actor: text("actor").notNull(),
+    runId: text("run_id"),
+    body: text("body"),
+    data: jsonb("data").notNull().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ticket_events_ticket_created_idx").on(t.ticketId, t.createdAt)],
 );
 
 export const questions = pgTable(
