@@ -19,13 +19,14 @@ Temporary progress log until andy-intelligence can track its own work (then migr
 
 **Verified locally:** tests, typecheck, lint, builds, and a smoke run of the bundled server (`/health` 200, `/api/me` 401, SPA fallback 200).
 
+**Decided (Andy, later 2026-10-21):** repo is public (ADR-0015: secret hygiene, TruffleHog + GitHub push protection); CI plans / local applies and public service with app-level auth confirmed (ADR-0010, 0011). Neon reconfirmed after checking Cloud SQL has no free tier (~$10/mo minimum).
+
 **Pending decisions (Andy):**
 
 - ADR-0012 (proposed): contract suites only for WorkTracker/Executor/QuotaSource.
-- Branch protection: on GitHub Free, protected branches/rulesets aren't available for **private** org repos. Options: make the repo public, upgrade the org to Team, or rely on CI + discipline until then. Needed before agents push PRs (M1).
 - MCP OAuth spike: end of M0 or start of M1?
 
 **Blocked on Andy:**
 
-- Repo access for Claude (create repo + install Claude's GitHub app on the org).
-- Runbook steps 1–4 (bootstrap apply, control-plane plan review + apply, Google provider, Neon secret).
+- Claude GitHub App install on the org (push access).
+- Runbook steps 0–4.
