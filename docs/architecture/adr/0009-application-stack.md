@@ -13,7 +13,7 @@ ARCHITECTURE §11 left the API framework to the builder. Andy asked for the stan
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | API                    | Hono + `@hono/node-server`, `@hono/zod-openapi` (Zod v4)                                                                                |
 | Validation / contracts | Zod v4                                                                                                                                  |
-| DB                     | Drizzle ORM + drizzle-kit, `pg` driver                                                                                                  |
+| DB                     | `@google-cloud/firestore` with Zod converters (ADR-0017)                                                                                |
 | Auth (server)          | `firebase-admin` `verifyIdToken`                                                                                                        |
 | UI                     | React 19, Vite, Tailwind v4, shadcn/ui (new-york), TanStack Query; TanStack Router/Table and dnd-kit added when screens need them (M1+) |
 | Tests                  | Vitest (workspace projects)                                                                                                             |

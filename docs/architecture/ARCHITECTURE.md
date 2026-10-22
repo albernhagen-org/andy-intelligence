@@ -39,8 +39,8 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ## 2. Core principles
 
-1. **LLMs decide; deterministic systems hold state.** Agents refine, split, size, design, implement, review. State lives in Postgres; the control-plane service itself is stateless.
-2. **Postgres is the system of record for work (tickets, questions, history), configuration, runs, and spend. GitHub is the system of record for code** (repos, PRs, CI, Actions as the agent runtime). Every ticket links to its runs, PRs, models, and costs in one place (ADR-0016).
+1. **LLMs decide; deterministic systems hold state.** Agents refine, split, size, design, implement, review. State lives in Firestore; the control-plane service itself is stateless. Flow is **event-driven** (callbacks, webhooks, queued tasks), not polling.
+2. **Firestore is the system of record for work (tickets, questions, history), configuration, runs, and spend. GitHub is the system of record for code** (repos, PRs, CI, Actions as the agent runtime). Every ticket links to its runs, PRs, models, and costs in one place (ADR-0016).
 3. **Read freely, write with approval.** Agents hold read-only credentials everywhere. Code changes arrive as PRs. Infrastructure changes arrive as Terraform PRs. Prod changes require Andy.
 4. **Contract-first, adapters behind ports.** Vendor concepts never leak into the domain.
 5. **Ask, don't assume.** Agents (including the agents building this system) escalate ambiguity as structured questions rather than guessing on anything consequential.
@@ -56,14 +56,14 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
  ┌───────────────────────┐   ┌───────────────────────────────────────────────┐   ┌────────────────────────────┐
  │ Web UI + story board  │──▶│ REST API (OpenAPI)                             │   │ GitHub Actions:            │
  │ Claude desktop (MCP)  │──▶│ Remote MCP endpoint (/mcp)                     │──▶│  • Claude Code (claude-sub)│
- │ GitHub (PRs, checks)  │──▶│ GitHub App webhook receiver + reconciler       │   │  • OpenCode (openrouter)   │
+ │ GitHub (PRs, checks)  │──▶│ GitHub App webhook receiver                    │   │  • OpenCode (openrouter)   │
  └───────────────────────┘   │ Pipeline engine (stages, DoR, gates)           │──▶│ Jules REST API (google-sub)│
                              │ Router (tiers × quota × budgets × overrides)   │──▶│ Direct OpenRouter calls    │
                              │ Questions / Needs-you                          │   │  (single-call steps)       │
- Cloud Scheduler ───────────▶│ Jobs: reconcile, model scout, quota sampling   │   └────────────────────────────┘
+ Cloud Tasks / Scheduler ───▶│ Run watchdogs (per run), weekly model scout    │   └────────────────────────────┘
                              └───────────────┬───────────────────────────────┘
                                              │
-                Postgres (tickets, config, runs, questions, audit)   Secret Manager   Cloud Logging/Trace (OTel)
+               Firestore (tickets, config, runs, questions, audit)   Secret Manager   Cloud Logging/Trace (OTel)
 
  Per project (generated from template): repo + AGENTS.md/docs/specs + CI + Cloud Deploy (dev → prod) + GCP dev/prod projects
 ```
@@ -120,15 +120,14 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 
 ---
 
-## 5. Domain model (Postgres)
+## 5. Domain model (Firestore documents)
 
-All records carry `project_id` where applicable.
+All records carry `project_id` where applicable. Documents are validated with the Zod schemas in `packages/contracts` on every read and write; tickets and their events nest under their project (`projects/{p}/tickets/{t}/events/{e}`). Rollups (cost per ticket/epic/model) are maintained when a run finishes, or computed with Firestore aggregation queries.
 
 | Entity | Key fields |
 |---|---|
 | **Project** | name, repos, GitHub board ref, GCP dev/prod project IDs, policy overrides, budget allocation, autonomy level, enabled |
-| **Ticket** (system of record) | key (e.g. `AI-42`), title, body, acceptance criteria (EARS), assumptions, type (epic/story/task/bug), parent, stage, size, tier, overrides (assignee agent/me, tier, model pin, autonomy, target env), needs_you, DoR status, rank |
-| **TicketDependency** | ticket, blocked_by ticket |
+| **Ticket** (system of record) | key (e.g. `AI-42`), title, body, acceptance criteria (EARS), assumptions, type (epic/story/task/bug), parent, stage, size, tier, overrides (assignee agent/me, tier, model pin, autonomy, target env), needs_you, DoR status, rank, blocked_by (ticket ids) |
 | **TicketEvent** | ticket, kind (comment / stage_change / field_change / run_linked / pr_linked …), actor (andy / agent:<run> / system), body/diff, timestamp — the ticket's full history |
 | **Question** | ticket, text, options, suggested_answer, assumptions, urgency, status, answer, answered_via, timestamps |
 | **Run** | ticket, step (refine/plan/build/review/verify/scout), harness, provider, model, tier, status, started/ended, tokens, cost_usd (actual or API-equivalent estimate), quota snapshot, links (Action run, Jules session, PR), **outcome** (merged_clean / reworked / reverted / failed), would_auto_merge |
@@ -163,7 +162,7 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 
 | Port | Domain concepts | v1.x adapters | Later |
 |---|---|---|---|
-| `WorkTracker` | Ticket, Stage, Field, Comment, Child, Dependency | **Native (Postgres)** | GitHub Issues, Linear (mirror/export) |
+| `WorkTracker` | Ticket, Stage, Field, Comment, Child, Dependency | **Native (Firestore)** | GitHub Issues, Linear (mirror/export) |
 | `CodeHost` | Repo, PullRequest, CheckRun, Merge | GitHub App (REST + webhooks) | — |
 | `Executor` | RunRequest, RunStatus, RunResult, Artifact links | **Claude Code via Actions**, **Jules REST API**, **OpenCode via Actions** | Cloud Run Jobs, Agent SDK, Replicas |
 | `ModelGateway` | Completion, Usage, Cost | OpenRouter (direct single-call steps) | LiteLLM, direct providers |
@@ -183,10 +182,10 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 - **API** — REST, OpenAPI-documented, the single entry point for UI and MCP.
 - **MCP server** — remote, Streamable HTTP at `/mcp`. Tools generated from API contracts. v1.x tools: `list_projects`, `create_ticket`, `get_ticket`, `refine` (start refinement), `list_needs_me`, `answer_question`, `set_override`, `start`, `status`, `quota`, `promote_release`, `get_config`, `propose_config_change`.
 - **Webhook receiver** — GitHub App webhooks for PRs, check runs, and workflow runs (HMAC-verified, idempotent by delivery ID).
-- **Reconciler** — periodically compares in-flight runs and open PRs with Postgres; heals drift from missed webhooks or callbacks. Runs only when work is in flight, so the database can scale to zero.
+- **Run watchdog** — when a run is dispatched, a Cloud Tasks task is queued for its timeout; if the run hasn't called back by then, the watchdog checks the executor/PR directly and heals or flags Needs-you. No periodic polling; nothing runs when no work is in flight.
 - **Pipeline engine** — stage transitions, DoR checks, gate rules, dependency release, retry policy.
 - **Router** — picks the route for a step: overrides → tier routes in order → skip providers paused by quota/budget → fall back or queue.
-- **Scheduled jobs** (Cloud Scheduler → authenticated endpoints): reconcile, weekly **model scout**, quota sampling.
+- **Scheduled jobs** (Cloud Scheduler → authenticated endpoint): weekly **model scout** only. Quota readings are captured from run results, not sampled.
 - **UI** — static SPA served by the same service.
 
 ### 7.2 Executors
@@ -256,10 +255,10 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 ## 10. Observability and cost
 
 - OTel traces/logs → Cloud Trace / Cloud Logging.
-- Run records (tokens, cost, outcome, quota snapshot) in Postgres drive the UI.
+- Run records (tokens, cost, outcome, quota snapshot) in Firestore drive the UI.
 - Paid cost from OpenRouter usage; subscription runs record **API-equivalent cost estimates** (labelled as estimates) alongside quota %.
 - Transcripts are not stored; run detail links to the Action log / Jules session / PR.
-- **Backups:** Postgres is now the only copy of tickets, so a scheduled logical backup (`pg_dump` → GCS bucket with retention) ships in M1.
+- **Backups:** Firestore is the only copy of tickets, so daily Firestore scheduled backups (short retention; pennies at this size) ship in M1. Optional BigQuery export for ad-hoc analytics later.
 
 ---
 
@@ -270,11 +269,11 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 | Language / repo | TypeScript, pnpm workspaces monorepo |
 | API | Node HTTP framework with Zod-based OpenAPI generation (builder to propose; e.g., Hono + zod-openapi) |
 | MCP | Official MCP TypeScript SDK, Streamable HTTP, OAuth |
-| DB | Postgres on Neon free tier (ADR-0008) + Drizzle ORM + migrations |
+| DB | Firestore (Native mode, default database, us-central1; free tier) with Zod-validated converters; no migrations (ADR-0017) |
 | UI | React, Vite, shadcn/ui, Tailwind, TanStack Router/Query/Table, dnd-kit (story board), shadcn charts; OpenAPI-generated client |
-| Runtime | Cloud Run (single service), Cloud Scheduler, Secret Manager |
+| Runtime | Cloud Run (single service), Cloud Tasks, Cloud Scheduler (weekly scout), Secret Manager |
 | Auth | Firebase Auth / Identity Platform (Google) + MCP OAuth facade |
-| Work tracker | Native in Postgres + in-app story board + MCP (ADR-0016) |
+| Work tracker | Native in Firestore + in-app story board + MCP (ADR-0016) |
 | Code host | GitHub App on Andy's personal account; public repos (ADR-0003, ADR-0015) |
 | Executors | GitHub Actions (Claude Code, OpenCode), Jules REST API, OpenRouter |
 | Release | Cloud Deploy (per project) |
@@ -289,11 +288,11 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 Each milestone must work **end to end** before the next starts. Acceptance criteria are verified by Andy.
 
 ### M0 — Foundations
-Repo scaffold, contracts package, Terraform for control-plane GCP project (plan reviewed by Andy), Postgres + migrations, auth (UI + API allow-list), CI, ADRs for decisions in this doc.
+Repo scaffold, contracts package, Terraform for control-plane GCP project (plan reviewed by Andy), Firestore database (server-only access), auth (UI + API allow-list), CI, ADRs for decisions in this doc.
 **Done when:** Andy can sign in to an empty UI on Cloud Run; unauthorized users are rejected; `terraform plan` is clean.
 
 ### M1 — Vertical slice (Claude only, one project)
-Native tickets + story board (stages, drag-and-drop, ticket detail with history); GitHub App (PR/check webhooks, workflow dispatch) + reconciler; project registration; refinement with structured questions; Needs-you inbox; nightly DB backup; Claude Code executor via Actions; PR with structured summary; all merges gated; run records with outcomes and would-auto-merge; remote MCP with core tools (`create_ticket`, `list_needs_me`, `answer_question`, `status`); quota capture for claude-sub with UI warnings.
+Native tickets + story board (stages, drag-and-drop, ticket detail with history); GitHub App (PR/check webhooks, workflow dispatch) + run watchdog; project registration; refinement with structured questions; Needs-you inbox; nightly DB backup; Claude Code executor via Actions; PR with structured summary; all merges gated; run records with outcomes and would-auto-merge; remote MCP with core tools (`create_ticket`, `list_needs_me`, `answer_question`, `status`); quota capture for claude-sub with UI warnings.
 **Done when:** From Claude desktop, Andy creates a ticket → agent asks refinement questions → Andy answers via MCP → ticket reaches Ready → Claude builds → PR opens → Andy merges → run shows in UI with cost/quota.
 
 ### M2 — Second executor + routing
@@ -315,7 +314,7 @@ Prod monitoring agent and alert→ticket flow; write-approval execution; model-b
 
 ## 13. Open questions
 
-Resolved in M0: GitHub home (personal account, public repos — ADR-0003); GCP project `andy-intelligence-512400` in `us-central1` (ADR-0007); Neon (ADR-0008); default run.app URL (ADR-0007); work tracking native (ADR-0016).
+Resolved in M0: GitHub home (personal account, public repos — ADR-0003); GCP project `andy-intelligence-512400` in `us-central1` (ADR-0007); Firestore (ADR-0017); default run.app URL (ADR-0007); work tracking native (ADR-0016).
 
 Remaining:
 

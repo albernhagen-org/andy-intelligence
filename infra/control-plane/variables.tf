@@ -24,8 +24,3 @@ variable "allowed_emails" {
   sensitive   = true
 }
 
-variable "database_secret_ready" {
-  type        = bool
-  description = "Flip to true after adding a version to control-plane-database-url; wires DATABASE_URL into the service."
-  default     = false
-}

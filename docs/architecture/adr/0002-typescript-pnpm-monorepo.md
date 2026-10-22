@@ -17,7 +17,7 @@ Single repo, pnpm workspaces, Node 24 (CI) / ≥22 (local).
 apps/api            Hono API, later MCP + webhooks + jobs
 apps/web            React SPA (served by the API)
 packages/contracts  Zod schemas, port interfaces, fakes, contract suites
-packages/db         Drizzle schema + migrations
+packages/store      Firestore client + Zod converters
 infra/bootstrap     one-time GCP bootstrap (state, WIF)
 infra/control-plane control-plane GCP resources
 ```

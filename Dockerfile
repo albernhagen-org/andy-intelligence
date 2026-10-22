@@ -11,8 +11,7 @@ RUN pnpm --filter @andy/api deploy --prod --legacy /out
 FROM node:24-slim
 WORKDIR /app
 ENV NODE_ENV=production \
-    WEB_ROOT=/app/public \
-    MIGRATIONS_DIR=/app/dist/drizzle
+    WEB_ROOT=/app/public
 COPY --from=build /out/node_modules ./node_modules
 COPY --from=build /out/package.json ./package.json
 COPY --from=build /repo/apps/api/dist ./dist

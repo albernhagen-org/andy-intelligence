@@ -1,6 +1,6 @@
-# Control plane: one Cloud Run service (API + MCP + SPA), its identities, secrets,
+# Control plane: one Cloud Run service (API + MCP + SPA), its identities, Firestore,
 # image registry, and Firebase/Identity Platform auth. Applied by Andy after reviewing
-# the plan (CI posts plans on PRs). App image updates are deployed by CI, not Terraform.
+# the plan (CI checks the plan on PRs). App image updates are deployed by CI, not Terraform.
 
 terraform {
   required_version = ">= 1.9"
@@ -49,10 +49,12 @@ resource "google_project_service" "apis" {
     "artifactregistry.googleapis.com",
     "cloudtrace.googleapis.com",
     "firebase.googleapis.com",
+    "firebaserules.googleapis.com",
+    "firestore.googleapis.com",
     "identitytoolkit.googleapis.com",
     "logging.googleapis.com",
     "run.googleapis.com",
-    "secretmanager.googleapis.com",
+    "secretmanager.googleapis.com", # used from M1 (GitHub App key, OAuth tokens)
   ])
   service            = each.value
   disable_on_destroy = false
@@ -97,6 +99,8 @@ resource "google_project_iam_member" "runtime" {
     "roles/cloudtrace.agent",
     # verifyIdToken(checkRevoked=true) reads the user record.
     "roles/firebaseauth.viewer",
+    # Read/write Firestore documents (no admin: can't change indexes, rules, or the database).
+    "roles/datastore.user",
   ])
   project = var.project_id
   role    = each.value
@@ -136,20 +140,32 @@ resource "google_service_account_iam_member" "deployer_acts_as_runtime" {
   member             = "serviceAccount:${google_service_account.deployer.email}"
 }
 
-# ── Secrets (containers only; Andy adds versions — never Terraform, never CI) ──
+# ── Database: Firestore (ADR-0017) ──────────────────────────────────────────
 
-resource "google_secret_manager_secret" "database_url" {
-  secret_id = "control-plane-database-url"
-  replication {
-    auto {}
-  }
-  depends_on = [google_project_service.apis]
+resource "google_firestore_database" "default" {
+  name                    = "(default)" # only the default database gets the free tier
+  location_id             = var.region
+  type                    = "FIRESTORE_NATIVE"
+  delete_protection_state = "DELETE_PROTECTION_ENABLED"
+  deletion_policy         = "ABANDON"
+  depends_on              = [google_project_service.apis]
 }
 
-resource "google_secret_manager_secret_iam_member" "runtime_database_url" {
-  secret_id = google_secret_manager_secret.database_url.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.runtime.email}"
+# Server-only access: the Firebase web config is public, so client SDKs must be denied.
+# The API uses IAM (runtime SA), which bypasses these rules.
+resource "google_firebaserules_ruleset" "firestore_deny_all" {
+  source {
+    files {
+      name    = "firestore.rules"
+      content = "rules_version = '2'; service cloud.firestore { match /databases/{database}/documents { match /{document=**} { allow read, write: if false; } } }"
+    }
+  }
+  depends_on = [google_firestore_database.default]
+}
+
+resource "google_firebaserules_release" "firestore" {
+  name         = "cloud.firestore"
+  ruleset_name = "projects/${var.project_id}/rulesets/${google_firebaserules_ruleset.firestore_deny_all.name}"
 }
 
 # ── Auth: Firebase + Identity Platform (Google sign-in) ─────────────────────
@@ -241,22 +257,6 @@ resource "google_cloud_run_v2_service" "control_plane" {
         name  = "FIREBASE_AUTH_DOMAIN"
         value = data.google_firebase_web_app_config.ui.auth_domain
       }
-      env {
-        name  = "RUN_MIGRATIONS"
-        value = "true"
-      }
-      dynamic "env" {
-        for_each = var.database_secret_ready ? [1] : []
-        content {
-          name = "DATABASE_URL"
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.database_url.secret_id
-              version = "latest"
-            }
-          }
-        }
-      }
     }
   }
 
@@ -268,8 +268,5 @@ resource "google_cloud_run_v2_service" "control_plane" {
     ]
   }
 
-  depends_on = [
-    google_project_service.apis,
-    google_secret_manager_secret_iam_member.runtime_database_url,
-  ]
+  depends_on = [google_project_service.apis, google_firestore_database.default]
 }

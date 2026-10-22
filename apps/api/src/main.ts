@@ -1,6 +1,5 @@
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { runMigrations } from "@andy/db/migrate";
 import { createApp } from "./app";
 import { parseAllowList } from "./auth";
 import { firebaseVerifier } from "./firebase";
@@ -15,19 +14,6 @@ async function main() {
   const projectId = requireEnv("GCP_PROJECT_ID");
   const allowedEmails = parseAllowList(requireEnv("ALLOWED_EMAILS"));
   const port = Number(process.env.PORT ?? 8080);
-
-  const databaseUrl = process.env.DATABASE_URL;
-  if (process.env.RUN_MIGRATIONS === "true") {
-    if (databaseUrl) {
-      await runMigrations(databaseUrl, process.env.MIGRATIONS_DIR);
-      console.log(JSON.stringify({ severity: "INFO", message: "migrations applied" }));
-    } else {
-      // Expected until the database secret is wired in (database_secret_ready=false).
-      console.log(
-        JSON.stringify({ severity: "WARNING", message: "DATABASE_URL unset; skipping migrations" }),
-      );
-    }
-  }
 
   const app = createApp({
     verifier: firebaseVerifier(projectId),

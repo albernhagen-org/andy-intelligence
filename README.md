@@ -28,7 +28,7 @@ pnpm --filter @andy/web dev          # :5173, proxies /api to :8080
 | `apps/api`            | Hono API (later MCP, webhooks, jobs); serves the SPA |
 | `apps/web`            | React + Vite + shadcn UI                             |
 | `packages/contracts`  | Zod entities, ports, fakes, contract suites          |
-| `packages/db`         | Drizzle schema + migrations                          |
+| `packages/store`      | Firestore client + Zod-validated converters          |
 | `infra/bootstrap`     | One-time GCP bootstrap (state bucket, GitHub OIDC)   |
 | `infra/control-plane` | Control-plane GCP resources                          |
 

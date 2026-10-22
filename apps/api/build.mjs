@@ -1,5 +1,4 @@
 import { build } from "esbuild";
-import { cpSync } from "node:fs";
 
 // Bundle our TS workspace packages (@andy/*); leave npm deps external —
 // they're installed in the runtime image via `pnpm deploy`.
@@ -22,5 +21,3 @@ await build({
   sourcemap: true,
   plugins: [externalizeNpm],
 });
-
-cpSync("../../packages/db/drizzle", "dist/drizzle", { recursive: true });

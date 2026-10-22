@@ -42,7 +42,7 @@ export type NewWorkItem = z.input<typeof NewWorkItem>;
 export interface WorkTracker {
   create(item: NewWorkItem): Promise<WorkItem>;
   get(ref: string): Promise<WorkItem | null>;
-  /** Items changed since `since` (ISO), or all items when omitted. Used by the reconciler. */
+  /** Items changed since `since` (ISO), or all items when omitted. Used by the run watchdog and UI refresh. */
   list(projectRef: string, since?: string): Promise<WorkItem[]>;
   setStage(ref: string, stage: Stage): Promise<void>;
   comment(ref: string, body: string): Promise<void>;

@@ -51,7 +51,7 @@ export const DorStatus = z.enum(["not_met", "met"]);
 export const TicketKey = z.string().regex(/^[A-Z][A-Z0-9]{0,9}-\d+$/);
 export type TicketKey = z.infer<typeof TicketKey>;
 
-/** Postgres is the system of record for tickets (ADR-0016). */
+/** The control plane is the system of record for tickets (ADR-0016). */
 export const Ticket = z.object({
   id: Id,
   projectId: Id,

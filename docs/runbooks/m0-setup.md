@@ -96,18 +96,7 @@ Only emails in `allowed_emails` get past the API; anyone else can complete Googl
 
 ## 5. Database
 
-Neon free tier (ADR-0008; Cloud SQL has no free tier — reconfirmed 2026-10-21).
-
-1. At https://neon.tech sign in with Google or GitHub, create project `andy-intelligence` in a US region, and copy the **pooled** connection string (it includes `sslmode=require`).
-2. Add it to Secret Manager without it touching your shell history or this repo:
-
-   ```sh
-   read -rs DATABASE_URL && printf '%s' "$DATABASE_URL" | \
-     gcloud secrets versions add control-plane-database-url --data-file=- --project andy-intelligence-512400
-   unset DATABASE_URL
-   ```
-
-3. Tell Claude. It will open a PR flipping `database_secret_ready` to `true`; you apply it like step 3.
+Nothing to do. Firestore is created by step 3's Terraform (ADR-0017): no account, no connection string, no secret. Client access is denied by security rules; only the API's service account can read and write.
 
 ## 6. First deploy
 
@@ -119,4 +108,4 @@ Merge the M0 PR to `main`. The **Deploy control plane** workflow builds the imag
 - [ ] Sign in with a different Google account → "not allowed" message (API returns 403).
 - [ ] `curl -i <service_url>/api/me` → 401.
 - [ ] `terraform plan` in `infra/control-plane` → "No changes".
-- [ ] Cloud Run logs show `migrations applied` once the database is wired.
+- [ ] Firestore console shows the `(default)` database in `us-central1` with deny-all rules.
