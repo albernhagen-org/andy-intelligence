@@ -81,7 +81,7 @@ If a verified fact contradicts the architecture, stop and ask how to proceed.
 ### 6. Communication
 
 - Brief status updates; no narration of every step.
-- Whenever you cite an ID (PR #, ADR number, slice, open question, step), give its short title with it — e.g. "PR #1 (M0 foundations)", "ADR-0019 (Actions OIDC callbacks)". Never a bare number.
+- Never use a bare ID (milestone, slice, PR, ADR, open question, runbook step) in chat, PR titles/descriptions, or docs. Lead with a descriptive title, ID in parentheses: "Ticket core (M1.2)", "Foundations: repo, sign-in, GCP infra (M0)", "Actions OIDC callbacks (ADR-0019)". Milestone titles are in ARCHITECTURE §12.
 - When blocked on me, say exactly what you need and why, in one message.
 - If you think a requirement is wrong or over-engineered, say so directly with a recommendation.
 
@@ -118,14 +118,14 @@ andy-intelligence/
 - Key decisions already made (don't relitigate without new facts): personal public GitHub repo (ADR-0003); native work tracking with in-app UI + MCP, GitHub for code only (ADR-0016); Firestore, event-driven, no polling (ADR-0017); GCP project `andy-intelligence-512400`, `us-central1`, default run.app URL (ADR-0007); app-level auth on a public Cloud Run service (ADR-0010); Terraform plans in CI, applies by Andy locally (ADR-0011); public-repo secret hygiene (ADR-0015).
 - Decided in slice M1.0 (ADR-0018 – ADR-0024): Jules completion via PR webhook + deadline watchdog; agent callbacks authenticated with GitHub Actions OIDC; rollups via Firestore aggregation queries; M1 scope cuts (list view, no DnD board) and slicing; docs ship with the change; ADR-0012 **rejected** — every port gets a fake + contract suite; no stacked PRs; Terraform pinned via tenv (ADR-0024).
 - Pending decisions: MCP OAuth mechanism (slice M1.1).
-- PRs: PR #1 (M0 foundations, `m0/foundations` → `main`) also carries slice M1.0 (docs sync). Terraform has never been validated or planned — CI's `terraform validate` and Andy's first `terraform plan` will be its first real test.
+- PRs: the Foundations PR (#1, `m0/foundations` → `main`) also carries the Docs sync slice (M1.0). Terraform has never been validated or planned — CI's `terraform validate` and Andy's first `terraform plan` will be its first real test.
 
 ## Your first response
 
 1. Confirm what you've read and the current state in ≤5 bullets.
-2. Check CI on PR #1 (M0 foundations). If CI fails, fix it on `m0/foundations`.
+2. Check CI on the Foundations PR (#1). If CI fails, fix it on `m0/foundations`.
 3. Walk me through `docs/runbooks/m0-setup.md` one step at a time. For Terraform, have me run `terraform plan` (or run it yourself if you have my credentials locally) and review the full output with me before any `apply`.
-4. When M0's "Done when" is verified and PR #1 is merged, confirm the next unblocked M1 slice from `docs/build-log.md` and wait for my go-ahead.
+4. When Foundations (M0) "Done when" is verified and PR #1 is merged, confirm the next unblocked slice of the first end-to-end flow (M1) from `docs/build-log.md` and wait for my go-ahead.
 
 ## Later sessions
 

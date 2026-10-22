@@ -2,7 +2,7 @@
 
 ## Why
 
-<!-- Slice (e.g. M1.2) and its "Done when", or the ticket key. -->
+<!-- Slice as title (ID), e.g. "Ticket core (M1.2)", and its "Done when". Never a bare ID. -->
 
 ## Risks
 
