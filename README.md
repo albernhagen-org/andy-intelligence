@@ -17,6 +17,8 @@ Docs ship with the change: a PR that changes commands, layout, design, or a deci
 
 ## Develop
 
+Tools: Node from `.nvmrc`; Terraform from `.terraform-version` via [tenv](https://github.com/tofuutils/tenv) (`brew install tenv`).
+
 ```sh
 pnpm install
 pnpm test        # vitest, all packages

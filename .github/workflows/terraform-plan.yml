@@ -32,8 +32,12 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_TF_PLAN_SA }}
+      - id: tfver
+        run: echo "version=$(cat .terraform-version)" >> "$GITHUB_OUTPUT"
+        working-directory: .
       - uses: hashicorp/setup-terraform@v4
         with:
+          terraform_version: ${{ steps.tfver.outputs.version }}
           terraform_wrapper: false
       - run: terraform init -input=false > /dev/null
       # Read-only identity: no state lock, no apply.

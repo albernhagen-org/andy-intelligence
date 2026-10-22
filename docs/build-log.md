@@ -28,25 +28,26 @@ Temporary progress log until andy-intelligence can track its own work (then migr
 ## 2026-10-22 — M0 PR opened; M1.0 docs sync
 
 - M0 PR opened: #1 (`m0/foundations` → `main`). Runbook steps 0–4 still pending.
-- M1.0 (`m1.0/docs-sync`, stacked on #1): ARCHITECTURE revision `2026-10-22a`; ADRs 0018–0023; `AGENTS.md` (+ `CLAUDE.md` symlink); PR template with docs checklist; build prompt moved to slices.
+- M1.0 docs sync, folded into PR #1 (M0 foundations) to avoid a stacked PR (closed PR #2): ARCHITECTURE revision `2026-10-22a`; ADRs 0018–0023; `AGENTS.md` (+ `CLAUDE.md` symlink); PR template with docs checklist; build prompt moved to slices.
 - **Decided (Andy):** ADR-0012 rejected — every port gets a fake + contract suite, written in the slice that first uses the port (ADR-0023). Docs ship with the change (ADR-0022). M1 sliced (ADR-0021).
+- **Decided (Andy):** no stacked PRs — slices branch from latest `main` (ADR-0021). Terraform pinned to 1.16.7 via `.terraform-version`, managed with tenv (ADR-0024). Docs written short and plain (ADR-0022).
 
 ## M1 slices
 
 Status: todo / in progress / PR open / merged. Definitions: ARCHITECTURE §12.
 
-| Slice                                  | Size            | Depends on       | Status                  |
-| -------------------------------------- | --------------- | ---------------- | ----------------------- |
-| M1.0 Docs sync                         | S               | M0               | PR open (stacked on #1) |
-| M1.1 MCP OAuth spike                   | M               | M0               | todo                    |
-| M1.2 Ticket core                       | M               | M0               | todo                    |
-| M1.3 UI: tickets + inbox               | M               | M1.2             | todo                    |
-| M1.4 MCP core tools                    | S               | M1.1, M1.2       | todo                    |
-| M1.5 GitHub App + project registration | M               | M1.2             | todo                    |
-| M1.6 Claude Code executor              | L (split 6a/6b) | M1.5             | todo                    |
-| M1.7 Refinement                        | M               | M1.3, M1.4, M1.6 | todo                    |
-| M1.8 Build + gate                      | M               | M1.7             | todo                    |
-| M1.9 Quota capture                     | S               | M1.6             | todo                    |
+| Slice                                  | Size            | Depends on       | Status             |
+| -------------------------------------- | --------------- | ---------------- | ------------------ |
+| M1.0 Docs sync                         | S               | M0               | PR open (in PR #1) |
+| M1.1 MCP OAuth spike                   | M               | M0               | todo               |
+| M1.2 Ticket core                       | M               | M0               | todo               |
+| M1.3 UI: tickets + inbox               | M               | M1.2             | todo               |
+| M1.4 MCP core tools                    | S               | M1.1, M1.2       | todo               |
+| M1.5 GitHub App + project registration | M               | M1.2             | todo               |
+| M1.6 Claude Code executor              | L (split 6a/6b) | M1.5             | todo               |
+| M1.7 Refinement                        | M               | M1.3, M1.4, M1.6 | todo               |
+| M1.8 Build + gate                      | M               | M1.7             | todo               |
+| M1.9 Quota capture                     | S               | M1.6             | todo               |
 
 Next unblocked once M0 is done: M1.1 and M1.2 (parallel).
 

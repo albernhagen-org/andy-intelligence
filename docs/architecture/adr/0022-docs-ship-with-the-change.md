@@ -15,6 +15,7 @@ The system is built by agents across many sessions; each session starts cold and
 - `AGENTS.md` at the repo root (with `CLAUDE.md` symlinked to it) carries the short always-loaded rules and the doc map, so every harness sees them without the build prompt.
 - The PR template has a docs checklist; "n/a" is an answer, unticked is not.
 - ARCHITECTURE.md front matter carries `revision` and `last_updated`, bumped on every content change. ADR bodies stay immutable; decisions change via new ADRs and status updates.
+- **Style:** concise, plain, readable without context. Lead with the point; tables and lists over prose; define terms and IDs where used; no filler.
 - The repo is canonical. The claude.ai Project keeps reference copies of ARCHITECTURE.md and BUILD-PROMPT.md, refreshed when the revision changes.
 - Managed projects inherit the rule through the template (`docs/features.md` on merge, `docs/architecture/overview.md` on design change).
 

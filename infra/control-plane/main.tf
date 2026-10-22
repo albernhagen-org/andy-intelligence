@@ -3,7 +3,7 @@
 # the plan (CI checks the plan on PRs). App image updates are deployed by CI, not Terraform.
 
 terraform {
-  required_version = ">= 1.9"
+  required_version = ">= 1.16, < 2.0"
   required_providers {
     google = {
       source  = "hashicorp/google"

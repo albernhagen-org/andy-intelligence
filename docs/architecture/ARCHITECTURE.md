@@ -3,7 +3,7 @@ title: andy-intelligence — Architecture & Vision
 status: accepted (v1.x scope)
 owner: Andy
 last_updated: 2026-10-22
-revision: 2026-10-22a (ADR-0012 rejected; docs upkeep rule)
+revision: 2026-10-22b (no stacked PRs; Terraform via tenv; doc style)
 ---
 
 # andy-intelligence — Architecture & Vision
@@ -291,7 +291,7 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 | Code host | GitHub App on Andy's personal account; public repos (ADR-0003, ADR-0015) |
 | Executors | GitHub Actions (Claude Code, OpenCode), Jules REST API, OpenRouter |
 | Release | Cloud Deploy (per project) |
-| IaC | Terraform |
+| IaC | Terraform, version pinned in `.terraform-version`, installed with tenv (ADR-0024); provider versions pinned in committed `.terraform.lock.hcl` |
 | Telemetry | OpenTelemetry → Cloud Trace / Logging |
 | Evals | Ori Eval (scout smoke tests) now; promptfoo later |
 
@@ -303,7 +303,7 @@ Each milestone must work **end to end** before the next starts. Acceptance crite
 
 ### How milestones are built: slices
 Each milestone is delivered as **slices**. A slice:
-- is one PR (or a short stack), independently reviewable and mergeable to `main`;
+- is one PR, branched from the latest `main` after its dependencies have merged — no stacked PRs;
 - has its own **Done when** that Andy can check in a few minutes;
 - is sized so one agent session can finish it (S ≈ hours, M ≈ a session, L = split it);
 - declares its dependencies, so independent slices can run in parallel sessions/worktrees.
@@ -372,6 +372,8 @@ Remaining:
 ## 14. Documentation
 
 Docs are part of the change, not a follow-up. Every slice PR updates the docs its change affects; the reviewer (Andy, or the review gate for managed projects) treats a stale doc like a failing test.
+
+**Style:** short, plain, and readable cold — by someone with no chat history. Lead with the point. Prefer tables and lists to prose. Define a term or ID where it's used. Cut anything that doesn't change what the reader does.
 
 | Doc | Owns | Update when |
 |---|---|---|

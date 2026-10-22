@@ -27,11 +27,20 @@ One-time steps that need your credentials. **This repo is public:** nothing in t
 
 ## 1. Prerequisites (your machine)
 
+Install tools (macOS). Terraform comes from **tenv**, which reads the repo's `.terraform-version` and installs that version automatically (ADR-0024). If Terraform or tfenv is already installed via Homebrew, `brew uninstall` it first so tenv's `terraform` is the one on your `PATH`.
+
+```sh
+brew install --cask google-cloud-sdk
+brew install tenv
+cd andy-intelligence && terraform -version   # prints the version in .terraform-version
+```
+
+Sign in:
+
 ```sh
 gcloud auth login
 gcloud auth application-default login
 gcloud config set project andy-intelligence-512400
-terraform -version   # >= 1.9
 ```
 
 You need Owner on `andy-intelligence-512400`; the project creator has it.
@@ -41,13 +50,14 @@ You need Owner on `andy-intelligence-512400`; the project creator has it.
 ```sh
 cd infra/bootstrap
 terraform init
+terraform providers lock -platform=darwin_arm64 -platform=linux_amd64   # lock file for your Mac and CI
 terraform plan -out=bootstrap.tfplan    # review
 terraform apply bootstrap.tfplan
 ```
 
 Move bootstrap state into the bucket it just created:
 
-1. Uncomment the `backend "gcs"` block in `infra/bootstrap/main.tf` (commit that change via PR afterwards).
+1. Uncomment the `backend "gcs"` block in `infra/bootstrap/main.tf`. Commit it, plus both `.terraform.lock.hcl` files, to a PR.
 2. `terraform init -migrate-state -backend-config="bucket=andy-intelligence-512400-tfstate"` → answer `yes`.
 3. Delete the local `terraform.tfstate*` files once the migration succeeds.
 
@@ -68,6 +78,7 @@ Your allow-listed email never goes in the repo:
 cd infra/control-plane
 cp terraform.tfvars.example terraform.tfvars   # gitignored; put your Google account email in it
 terraform init
+terraform providers lock -platform=darwin_arm64 -platform=linux_amd64
 terraform plan -out=cp.tfplan                  # review in full (CI only prints the summary line)
 terraform apply cp.tfplan
 ```
@@ -109,3 +120,12 @@ Merge the M0 PR to `main`. The **Deploy control plane** workflow builds the imag
 - [ ] `curl -i <service_url>/api/me` → 401.
 - [ ] `terraform plan` in `infra/control-plane` → "No changes".
 - [ ] Firestore console shows the `(default)` database in `us-central1` with deny-all rules.
+
+## Upgrading Terraform
+
+Do upgrades in their own PR, never mixed with feature work.
+
+| Upgrade       | Steps                                                                                                                                                                                                                                                                                            |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Terraform CLI | Edit `.terraform-version` → `terraform -version` (tenv installs it) → `terraform plan` in both `infra/` roots shows no unexpected changes → PR. CI reads the same file.                                                                                                                          |
+| Providers     | In each `infra/` root: `terraform init -upgrade` → `terraform providers lock -platform=darwin_arm64 -platform=linux_amd64` → review `plan` → PR with the updated `.terraform.lock.hcl`. Major versions: read the provider's upgrade guide first and widen the `version` constraint in `main.tf`. |
