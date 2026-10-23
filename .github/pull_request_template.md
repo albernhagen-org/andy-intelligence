@@ -10,6 +10,10 @@
 
 ## Assumptions
 
+## Security (ADR-0025)
+
+<!-- Trust boundaries, entry points, credentials, IAM, workflow permissions, or dependencies touched? Say which, or "none". -->
+
 ## Docs (ADR-0022)
 
 <!-- Tick each box or mark it n/a. Unticked means not done. -->
@@ -19,4 +23,5 @@
 - [ ] ADR added or status updated
 - [ ] Runbook — manual steps
 - [ ] `docs/build-log.md` — slice status
+- [ ] `docs/security/threat-model.md` — trust boundary / IAM / credentials changed
 - [ ] `AGENTS.md` / `docs/BUILD-PROMPT.md` — agent rules

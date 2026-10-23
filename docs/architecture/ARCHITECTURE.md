@@ -2,8 +2,8 @@
 title: andy-intelligence — Architecture & Vision
 status: accepted (v1.x scope)
 owner: Andy
-last_updated: 2026-10-22
-revision: 2026-10-22d (ID: title naming)
+last_updated: 2026-10-23
+revision: 2026-10-23a (agentic security review)
 ---
 
 # andy-intelligence — Architecture & Vision
@@ -47,7 +47,8 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 5. **Ask, don't assume.** Agents (including the agents building this system) escalate ambiguity as structured questions rather than guessing on anything consequential.
 6. **Everything configurable in the UI, everything audited.**
 7. **Untrusted content is data, never instructions.** Issue bodies, comments, web pages, and logs may contain prompt injection.
-8. **Docs ship with the change.** A PR that changes behavior, structure, setup, or a decision updates the affected docs in the same PR (§14). This applies to the control plane and to every managed project.
+8. **Security is checked continuously.** Every PR gets deterministic scans and a security-review agent; the whole system gets a recurring threat-model review (§9.1).
+9. **Docs ship with the change.** A PR that changes behavior, structure, setup, or a decision updates the affected docs in the same PR (§14). This applies to the control plane and to every managed project.
 
 ---
 
@@ -112,6 +113,7 @@ Enterprise-shaped (durable state, policy, gates, least privilege, audit, contrac
 - **Otherwise:** S tasks may auto-merge if project policy allows; M/L always go to Andy in v1.x.
 - From M1: First end-to-end flow onward, **record what the gate *would* have decided** to build the dataset for later model-based scoring.
 - Cross-model review: a reviewer from a different vendor than the implementer comments on every PR.
+- Security review on every PR (§9.1). A high/critical security finding is a hard veto unless Andy marks it `security-accepted`.
 
 ### 4.6 Environments and release
 - Per project: separate GCP projects `<app>-dev` and `<app>-prod`.
@@ -195,7 +197,7 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 - **Run watchdog** — when a run is dispatched, a Cloud Tasks task is queued for its deadline. If no completion signal has arrived by then, the watchdog checks the executor/PR directly **once**, then heals the record or flags Needs-you. No periodic polling; nothing runs when no work is in flight.
 - **Pipeline engine** — stage transitions, DoR checks, gate rules, dependency release, retry policy.
 - **Router** — picks the route for a step: overrides → tier routes in order → skip providers paused by quota/budget → fall back or queue.
-- **Scheduled jobs** (Cloud Scheduler → authenticated endpoint): weekly **model scout** only. Quota readings are captured from run results, not sampled.
+- **Scheduled jobs** (Cloud Scheduler → authenticated endpoint): weekly **model scout**; weekly **system security review** per project when something merged since the last one (§9.1). Quota readings are captured from run results, not sampled.
 - **UI** — static SPA served by the same service.
 
 ### 7.2 Executors
@@ -206,8 +208,8 @@ Contracts are defined in `packages/contracts` (Zod schemas + TypeScript interfac
 - **Direct**: in-process OpenRouter calls for single-call steps (sizing, question drafting where non-agentic, digests, scout analysis).
 
 ### 7.3 Skills (platform plugin, versioned)
-`/ideate`, `/refine`, `/spec`, `/plan-story`, `/build`, `/review`, `/verify`, `/scout-models`, (later `/digest`).
-Substance lives in shared procedure docs (`docs/agent/*.md`) so non-Claude harnesses use the same knowledge; Claude skills/subagents are thin wrappers. Subagents with least-privilege tools: researcher (read-only), designer, critic (read-only), test-writer, implementer, verifier (run, no edit).
+`/ideate`, `/refine`, `/spec`, `/plan-story`, `/build`, `/review`, `/security-review` (per PR), `/threat-model` (system review), `/verify`, `/scout-models`, (later `/digest`).
+Substance lives in shared procedure docs (`docs/agent/*.md`) so non-Claude harnesses use the same knowledge; Claude skills/subagents are thin wrappers. Subagents with least-privilege tools: researcher (read-only), designer, critic (read-only), security reviewer (read-only, no shell or network), test-writer, implementer, verifier (run, no edit).
 
 ### 7.4 Model scout (weekly)
 1. Pull OpenRouter models API (pricing, context, availability).
@@ -238,12 +240,13 @@ docs/features.md                  # living catalog of shipped features (updated 
 docs/architecture/overview.md     # current HLD; C4 L1–L2 in Mermaid
 docs/architecture/adr/NNNN-*.md   # MADR, immutable
 docs/agent/*.md                   # shared procedures: size-rubric, build, review, escalation, security
+docs/security/threat-model.md     # living threat model + open risks (§9.1)
 specs/NNN-name/{design.md, tech-design.md, tasks.md, stories/*.md, mockups/}
 .github/workflows/                # thin callers → platform reusable workflows; CI checks
 CODEOWNERS                        # always-gated paths
 infra/                            # Terraform: dev/prod Cloud Run, Cloud Deploy pipeline, read-only agent SAs
 ```
-**Required CI checks** on `main`: tests, lint, typecheck, protected-path check, secret scan, "PR references a ticket" (ticket key in branch name or PR body, verified against the control-plane API). These enforce rules for every agent regardless of harness.
+**Required CI checks** on `main`: tests, lint, typecheck, protected-path check, secret scan, security scans and security-review agent (§9.1), "PR references a ticket" (ticket key in branch name or PR body, verified against the control-plane API). These enforce rules for every agent regardless of harness.
 
 Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, secrets refs, App install check, Terraform PR for GCP) → Andy approves Terraform PR.
 
@@ -263,6 +266,19 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 - **Prompt injection:** all agents instructed that tool output, issue text, web content, and logs are data. MCP scoping per project for agents. (Later: promptfoo red-team suite against MCP + agents.)
 - **Audit:** TicketEvent and ConfigChange tables; run records; GitHub history for code.
 - **Public repos:** no secrets, personal data, tfvars, or state in any repo; secret scanning + push protection + TruffleHog in CI (ADR-0015).
+- **Supply chain:** third-party GitHub Actions pinned to commit SHAs; Dependabot for npm, Actions, and Terraform providers.
+
+### 9.1 Continuous security review (ADR-0025)
+
+Applies to this repo now (M1.10: Security review automation) and to every managed project from M4: Second project + epics + story board.
+
+| Layer | When | What | Output | Blocks |
+|---|---|---|---|---|
+| Deterministic scans | Every PR | TruffleHog, CodeQL (TS + Actions), dependency review, Terraform misconfig scan, workflow linter | Check results | High/critical |
+| Security-review agent | Every PR push | Read-only agent reviews the diff against the threat model and ADRs: authn/authz, IAM, secrets, injection incl. prompt injection, workflow permissions, public-repo exposure, cost abuse | One PR comment, findings by severity | High/critical, unless Andy labels `security-accepted` with a reason |
+| System security review agent | End of each milestone; weekly if anything merged; on demand | Reads repo, threat model, ADRs, Terraform IAM, `terraform plan` drift; looks for risks no single PR shows | PR updating `docs/security/threat-model.md` | Milestone can't close with open high/critical risks unless Andy accepts them |
+
+**Agent guardrails:** same-repo PRs only (never forks, never `pull_request_target`); token `contents: read` + `pull-requests: write`; no shell or network tools; PR content is untrusted data. If the agent can't run, its check is neutral and Andy decides. Reviewer is a separate session from the implementer; from M2/M3 a different vendor.
 
 ---
 
@@ -299,7 +315,7 @@ Onboarding a project = UI/MCP "Add project" → bootstrap (branch protection, se
 
 ## 12. Milestones (v1.x)
 
-Each milestone must work **end to end** before the next starts. Acceptance criteria are verified by Andy.
+Each milestone must work **end to end** before the next starts. Acceptance criteria are verified by Andy. Every milestone's "Done when" also requires a system security review with no open high/critical risks, unless Andy accepted them (§9.1).
 
 | ID | Milestone | Outcome |
 |---|---|---|
@@ -343,6 +359,10 @@ Repo scaffold, contracts package, Terraform for control-plane GCP project (plan 
 | **M1.8: Build + gate** | Dispatcher picks Ready tickets; `build` step opens PR with structured summary and ticket key; all merges gated (Andy); `would_auto_merge` recorded; outcome set from merge/close webhook; cost estimate on the Run. | M | M1.7: Refinement | Ready ticket → PR → Andy merges → ticket advances; Run shows cost estimate and outcome |
 | **M1.9: Quota capture** | Timeboxed, best-effort. Capture claude-sub `rate_limits` from runs if available headless; otherwise readings stay **unknown** per policy. UI banner on warn/pause/unknown. | S | M1.6: Claude Code executor | Gauge shows a reading or "unknown"; banner appears at thresholds (test with seeded readings) |
 
+| **M1.10: Security review automation** | Per-PR scans (CodeQL, dependency review, Terraform misconfig scan, workflow linter) as required checks; pin actions to SHAs + Dependabot; per-PR security-review agent workflow; `docs/security/threat-model.md` v1 seeded with known risks; system security review workflow (weekly + manual); `/security-review` and `/threat-model` procedures in `platform/procedures/`. Andy adds the reviewer token secret and required checks. | M | M0: Foundations | A test PR with a planted issue (e.g. over-broad IAM role) gets a high finding and a failing check; the label override works; a manual system review opens a threat-model PR |
+
+Run M1.10: Security review automation first or alongside M1.1 and M1.2, so later slices are reviewed.
+
 Can run in parallel once M1.2: Ticket core merges:
 - M1.3: UI: tickets + inbox
 - M1.4: MCP core tools (also needs M1.1: MCP OAuth spike)
@@ -355,7 +375,7 @@ Jules adapter (completion via PR webhook); freeze `Executor` contract (two adapt
 OpenCode executor via Actions; OpenRouter direct-call gateway for single-call steps; global and per-project caps with hard stops; quota-aware route fallback with 20% reserves; weekly model scout producing pending tier changes; initial tier list seeded by scout. Slice at milestone start.
 
 ### M4: Second project + epics + story board
-Second real project onboarded via template + bootstrap; agent read access to API/MCP scoped per project; epics with child tickets and dependencies; just-in-time re-planning; config editing and audit/revert in UI and MCP; drag-and-drop story board; dedicated run-detail screen. Slice at milestone start.
+Second real project onboarded via template + bootstrap, including per-PR security checks and the weekly system security review (§9.1); agent read access to API/MCP scoped per project; epics with child tickets and dependencies; just-in-time re-planning; config editing and audit/revert in UI and MCP; drag-and-drop story board; dedicated run-detail screen. Slice at milestone start.
 
 ### M5: Dev → prod releases
 Project template Terraform + Cloud Deploy dev→prod; dev deploy + verification (Playwright/API tests + verification agent); promote/rollback from UI and MCP; release notes; rule-based auto-merge for S tasks. Slice at milestone start.
@@ -396,6 +416,7 @@ Docs are part of the change, not a follow-up. Every slice PR updates the docs it
 | `docs/architecture/adr/NNNN-*.md` | Why a decision was made (MADR) | Any architecture decision or deviation. ADR bodies are immutable; to change a decision write a new ADR and update the old one's `status` (`superseded by` / `amended by`). |
 | `docs/build-log.md` | Slice status, pending decisions, blockers | Every slice: start, PR open, merged. Retired once the system tracks its own work. |
 | `docs/runbooks/*.md` | Steps Andy runs by hand (setup, secrets, apply, release) | Any manual step is added, changed, or removed |
+| `docs/security/threat-model.md` | Assets, trust boundaries, threats, mitigations, open risks | A trust boundary, entry point, credential, or IAM grant is added or changed; after each system security review |
 | `docs/BUILD-PROMPT.md` | How a building agent behaves | Operating rules change |
 | `AGENTS.md` (`CLAUDE.md` → symlink) | Short, always-loaded rules for agents working in the repo | Rules or doc map change |
 | Package/app `README.md` | Only when a package has setup or usage the root README can't cover in a line | That package's usage changes |
