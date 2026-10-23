@@ -111,9 +111,12 @@ Nothing to do. Firestore is created by step 3's Terraform (ADR-0017): no account
 
 ## 6. First deploy
 
-Merge the M0 PR to `main`. The **Deploy control plane** workflow builds the image, pushes it, rolls Cloud Run, and smoke-tests `/health` (200) and `/api/me` (401).
+The **Deploy control plane** workflow builds the image, pushes it, rolls Cloud Run, and smoke-tests `/health` (200) and `/api/me` (401). It skips itself until the step 2–3 repository variables exist.
 
-## 7. Verify M0 "Done when"
+- PR #1: Foundations not merged yet → merge it; the deploy runs.
+- Already merged → GitHub → **Actions** → **Deploy control plane** → **Run workflow** on `main`.
+
+## 7. Verify M0: Foundations "Done when"
 
 - [ ] Open the `service_url` output, sign in with Google → "Needs you" page shows your email.
 - [ ] Sign in with a different Google account → "not allowed" message (API returns 403).
